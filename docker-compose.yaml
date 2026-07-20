@@ -32,10 +32,10 @@ services:
       - ${APACHE_CUSTOM_CONF:-./apache/httpd-custom.conf}:/usr/local/apache2/conf/httpd-custom.conf:ro
     command: [ "httpd-foreground" ]
     depends_on:
-      - backend
-      - frontend
+      - fin-backend
+      - fin-frontend
     networks:
-      - django-net
+      - fin-django-net
 
   # ----------------------------------------------------------------------------
   # 2. 前端服務: Vue 3.5 + TypeScript + Tailwind CSS v4.3 (Vite 5)
@@ -53,10 +53,10 @@ services:
       - NODE_ENV=development
     command: [ "npm", "run", "dev" ]
     depends_on:
-      init-dir:
+      fin-init-dir:
         condition: service_completed_successfully
     networks:
-      - django-net
+      - fin-django-net
 
   # ----------------------------------------------------------------------------
   # 3. 後端服務: Python 3.11 + Django 5.2 LTS + Django Unfold
@@ -73,10 +73,10 @@ services:
       - .env
     command: [ "sh", "/app/entrypoint.sh" ]
     depends_on:
-      - db
-      - redis
+      - fin-db
+      - fin-redis
     networks:
-      - django-net
+      - fin-django-net
 
   # ----------------------------------------------------------------------------
   # 4. 資料庫伺服器: MariaDB 12.3 (多資料庫與多帳號管理)
@@ -103,10 +103,10 @@ services:
       - --max-connections=250
       - --default-storage-engine=InnoDB
     depends_on:
-      init-dir:
+      fin-init-dir:
         condition: service_completed_successfully
     networks:
-      - django-net
+      - fin-django-net
 
   # ----------------------------------------------------------------------------
   # 5. 快取伺服器: Redis 8.8
@@ -123,10 +123,10 @@ services:
       - ${REDIS_CUSTOM_CONF:-./redis_conf/redis.conf}:/usr/local/etc/redis/redis.conf:ro
     command: [ "redis-server", "/usr/local/etc/redis/redis.conf" ]
     depends_on:
-      init-dir:
+      fin-init-dir:
         condition: service_completed_successfully
     networks:
-      - django-net
+      - fin-django-net
 
 # ------------------------------------------------------------------------------
 # 橋接網路定義 (Bridge Network)
