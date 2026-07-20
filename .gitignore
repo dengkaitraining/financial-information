@@ -1,0 +1,31 @@
+# Docker volume data directories
+/db_data/
+/redis_data/
+
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# Node / Frontend
+node_modules/
+dist/
+.output/
+
+# Environment local files
+.env
+.env.local
+.env.*.local
+db_conf/init_multi_db.sql
+backend/entrypoint.sh
+
+# Django
+staticfiles/
+media/
+db.sqlite3

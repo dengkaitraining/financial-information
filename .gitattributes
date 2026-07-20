@@ -1,0 +1,5 @@
+# Force LF line endings for shell scripts to prevent Windows git conversion (CRLF) from breaking Docker container execution
+*.sh text eol=lf
+*.py text eol=lf
+docker-compose.yaml text eol=lf
+Dockerfile text eol=lf

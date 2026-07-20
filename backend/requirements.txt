@@ -1,0 +1,18 @@
+# ==============================================================================
+# Django 後端服務 Python 套件相依性清單 (requirements.txt)
+# ==============================================================================
+
+# Django 5.2 LTS 長期支援版本框架
+Django>=5.2,<5.3
+
+# Django Unfold 現代化 Admin 後台管理介面套件
+django-unfold
+
+# MariaDB / MySQL 資料庫驅動介面 (原生 C 擴充模組)
+mysqlclient
+
+# Redis 原生 Python 客戶端驅動
+redis
+
+# Django Redis 快取與 Session 轉接器
+django-redis

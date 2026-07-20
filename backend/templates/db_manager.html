@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>進階資料庫與表單管理儀表板 (DataTables + 帳號切換)</title>
+    <!-- Tailwind CSS v4 CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- jQuery & DataTables CDN -->
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .dataTables_wrapper { color: #94a3b8; }
+        table.dataTable { border-collapse: collapse !important; background-color: #1e293b; color: #f8fafc; border-radius: 8px; overflow: hidden; }
+        table.dataTable thead th { background-color: #0f172a; color: #38bdf8; border-bottom: 2px solid #334155 !important; }
+        table.dataTable tbody tr { background-color: #1e293b; border-bottom: 1px solid #334155; }
+        table.dataTable tbody tr:hover { background-color: #334155; }
+        .dataTables_filter input, .dataTables_length select { background-color: #0f172a; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; padding: 4px 8px; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+    <!-- 頂部導覽列 -->
+    <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex items-center justify-between shadow-lg">
+        <div class="flex items-center space-x-3">
+            <span class="text-2xl">🗄️</span>
+            <div>
+                <h1 class="text-xl font-bold text-sky-400">進階資料庫與表單管理儀表板</h1>
+                <p class="text-xs text-slate-400">多帳號連線切換 • 權限審計 (SHOW GRANTS) • DataTables CRUD 即時編輯</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-4">
+            <span class="bg-slate-800 text-slate-300 text-xs px-3 py-1.5 rounded-full border border-slate-700">
+                登入使用者: <strong class="text-amber-400">{{ user.username }}</strong>
+            </span>
+            <a href="/admin/" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2 text-sm font-medium rounded-lg border border-slate-700 transition">
+                ← 返回 Unfold 管理後台
+            </a>
+        </div>
+    </header>
+
+    <div class="p-6 max-w-7xl mx-auto space-y-6">
+        <!-- 區塊 1: 帳號切換 (Account Switcher) & 資料庫選擇 -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- 帳號選擇卡片 -->
+            <div class="bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-md flex flex-col justify-between">
+                <div>
+                    <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">1. 切換資料庫連線帳戶 (Multi-Account)</h2>
+                    <div class="space-y-2">
+                        {% for key, acc in accounts.items %}
+                            <a href="?account={{ key }}&db={{ acc.default_db }}" 
+                               class="block w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition border {% if selected_account == key %} bg-sky-600 border-sky-500 text-white shadow-md {% else %} bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 {% endif %}">
+                                <div class="font-bold">{{ acc.name }}</div>
+                            </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- 資料庫選擇卡片 -->
+            <div class="bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-md">
+                <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">2. 可存取資料庫 (SHOW DATABASES)</h2>
+                <div class="flex flex-wrap gap-2">
+                    {% for db in databases %}
+                        <a href="?account={{ selected_account }}&db={{ db }}" 
+                           class="px-3 py-1.5 rounded-lg text-xs font-semibold border transition {% if selected_db == db %} bg-emerald-600 border-emerald-500 text-white {% else %} bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 {% endif %}">
+                            💾 {{ db }}
+                        </a>
+                    {% empty %}
+                        <p class="text-xs text-rose-400">目前帳戶無可檢視的資料庫</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- 權限審計卡片 (SHOW GRANTS) -->
+            <div class="bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-md">
+                <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">3. 帳戶操作權限 (SHOW GRANTS)</h2>
+                <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 max-h-32 overflow-y-auto font-mono text-xs text-emerald-400 space-y-1">
+                    {% for grant in grants %}
+                        <div>• {{ grant }}</div>
+                    {% empty %}
+                        <div class="text-slate-500">無權限資訊</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 區塊 2: 資料表選擇與 DataTables 整合區 -->
+        <div class="bg-slate-900 rounded-xl border border-slate-800 shadow-lg p-6 space-y-6">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+                <div>
+                    <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                        <span>📋 資料表清單 (SHOW TABLES)</span>
+                        <span class="bg-sky-950 text-sky-400 border border-sky-800 text-xs px-2.5 py-0.5 rounded-full">
+                            當前資料庫: {{ selected_db }}
+                        </span>
+                    </h2>
+                    <p class="text-xs text-slate-400 mt-1">點擊下方資料表按鈕載入 DataTables 動態表格進行 CRUD 新增、修改、刪除</p>
+                </div>
+                <!-- 新增資料記錄按鈕 -->
+                <button id="btn-add-record" class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition shadow-md flex items-center space-x-1 hidden">
+                    <span>➕ 新增資料記錄</span>
+                </button>
+            </div>
+
+            <!-- 資料表選單按鈕 -->
+            <div class="flex flex-wrap gap-2">
+                {% for tbl in tables %}
+                    <button onclick="loadTableData('{{ tbl }}')" 
+                            class="tbl-btn px-3 py-1.5 rounded-md text-xs font-medium bg-slate-800 hover:bg-sky-700 border border-slate-700 text-slate-200 transition"
+                            data-table="{{ tbl }}">
+                        📄 {{ tbl }}
+                    </button>
+                {% empty %}
+                    <p class="text-sm text-slate-500">資料庫 {{ selected_db }} 中目前無任何資料表</p>
+                {% endfor %}
+            </div>
+
+            <!-- DataTables 載入呈現區 -->
+            <div id="table-container" class="mt-4 hidden">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 id="current-table-title" class="text-base font-bold text-amber-400"></h3>
+                    <span id="record-count" class="text-xs text-slate-400"></span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table id="dynamic-datatable" class="display w-full text-sm"></table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CRUD Modal 對話視窗 -->
+    <div id="crud-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center hidden z-50">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4">
+            <h3 id="modal-title" class="text-lg font-bold text-sky-400 border-b border-slate-800 pb-2"></h3>
+            <form id="crud-form" class="space-y-3 max-h-96 overflow-y-auto pr-2">
+                <div id="form-fields-container" class="space-y-3"></div>
+            </form>
+            <div class="flex justify-end space-x-3 pt-4 border-t border-slate-800">
+                <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-lg">取消</button>
+                <button type="button" id="btn-save-crud" class="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm font-semibold rounded-lg shadow">儲存</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let dataTableInstance = null;
+        let currentAccount = "{{ selected_account }}";
+        let currentDb = "{{ selected_db }}";
+        let currentTable = "";
+        let currentPkField = "id";
+        let tableColumns = [];
+        let currentModalAction = "insert";
+        let currentEditingPkValue = null;
+
+        function loadTableData(tableName) {
+            currentTable = tableName;
+            $('.tbl-btn').removeClass('bg-sky-600 text-white').addClass('bg-slate-800 text-slate-200');
+            $(`[data-table="${tableName}"]`).addClass('bg-sky-600 text-white').removeClass('bg-slate-800');
+
+            $('#current-table-title').text(`資料表數據編輯器: ${tableName}`);
+            $('#table-container').removeClass('hidden');
+            $('#btn-add-record').removeClass('hidden');
+
+            if (dataTableInstance) {
+                dataTableInstance.destroy();
+                $('#dynamic-datatable').empty();
+            }
+
+            $.ajax({
+                url: `/admin/db-manager/api/query/?account=${currentAccount}&db=${currentDb}&table=${tableName}`,
+                method: 'GET',
+                success: function(res) {
+                    if (res.error) {
+                        alert('載入資料表失敗: ' + res.error);
+                        return;
+                    }
+
+                    currentPkField = res.pk_field || 'id';
+                    tableColumns = res.columns;
+
+                    let datatableColumns = res.columns.map(c => ({
+                        data: c.data,
+                        title: c.title
+                    }));
+
+                    // 增加操作按鈕欄 (Action Buttons)
+                    datatableColumns.push({
+                        data: null,
+                        title: "操作選項",
+                        render: function(data, type, row) {
+                            let pkVal = row[currentPkField] || '';
+                            return `
+                                <div class="flex space-x-2">
+                                    <button onclick="openEditModal('${pkVal}')" class="px-2 py-1 bg-amber-600 hover:bg-amber-500 text-white text-xs rounded shadow">編輯</button>
+                                    <button onclick="deleteRecord('${pkVal}')" class="px-2 py-1 bg-rose-600 hover:bg-rose-500 text-white text-xs rounded shadow">刪除</button>
+                                </div>
+                            `;
+                        }
+                    });
+
+                    dataTableInstance = $('#dynamic-datatable').DataTable({
+                        data: res.data,
+                        columns: datatableColumns,
+                        pageLength: 10,
+                        language: {
+                            search: "搜尋表單:",
+                            lengthMenu: "每頁顯示 _MENU_ 筆記錄",
+                            info: "顯示第 _START_ 至 _END_ 筆，共 _TOTAL_ 筆",
+                            paginate: { first: "首頁", previous: "上一頁", next: "下一頁", last: "末頁" }
+                        }
+                    });
+
+                    window.tableDataCache = res.data;
+                }
+            });
+        }
+
+        // 開啟新增 Modal
+        $('#btn-add-record').click(function() {
+            currentModalAction = 'insert';
+            $('#modal-title').text(`新增記錄至 [${currentTable}]`);
+            buildFormFields({});
+            $('#crud-modal').removeClass('hidden');
+        });
+
+        // 開啟編輯 Modal
+        function openEditModal(pkValue) {
+            currentModalAction = 'update';
+            currentEditingPkValue = pkValue;
+            let row = window.tableDataCache.find(r => String(r[currentPkField]) === String(pkValue));
+            $('#modal-title').text(`修改記錄 [${currentPkField}=${pkValue}]`);
+            buildFormFields(row || {});
+            $('#crud-modal').removeClass('hidden');
+        }
+
+        function closeModal() {
+            $('#crud-modal').addClass('hidden');
+        }
+
+        function buildFormFields(rowData) {
+            let container = $('#form-fields-container');
+            container.empty();
+
+            tableColumns.forEach(col => {
+                let fieldName = col.data;
+                let val = rowData[fieldName] !== undefined ? rowData[fieldName] : '';
+                let isPk = (fieldName === currentPkField);
+
+                let fieldHtml = `
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">${fieldName} ${isPk ? '(主鍵 PK)' : ''}</label>
+                        <input type="text" name="${fieldName}" value="${val}" 
+                               class="w-full bg-slate-950 border border-slate-700 text-slate-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-sky-500 ${isPk && currentModalAction === 'update' ? 'opacity-50 cursor-not-allowed' : ''}" 
+                               ${isPk && currentModalAction === 'update' ? 'readonly' : ''}>
+                    </div>
+                `;
+                container.append(fieldHtml);
+            });
+        }
+
+        // 儲存 CRUD (新增 / 修改)
+        $('#btn-save-crud').click(function() {
+            let formData = {};
+            $('#crud-form').serializeArray().forEach(item => {
+                formData[item.name] = item.value;
+            });
+
+            $.ajax({
+                url: '/admin/db-manager/api/crud/',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    account: currentAccount,
+                    db: currentDb,
+                    table: currentTable,
+                    action: currentModalAction,
+                    data: formData,
+                    pk_field: currentPkField,
+                    pk_value: currentEditingPkValue
+                }),
+                success: function(res) {
+                    if (res.status === 'success') {
+                        alert(res.message);
+                        closeModal();
+                        loadTableData(currentTable);
+                    } else {
+                        alert('操作失敗: ' + (res.error || '未知錯誤'));
+                    }
+                }
+            });
+        });
+
+        // 刪除紀錄
+        function deleteRecord(pkValue) {
+            if (!confirm(`確定要刪除主鍵 ${currentPkField}=${pkValue} 之記錄嗎？此操作無法復原。`)) return;
+
+            $.ajax({
+                url: '/admin/db-manager/api/crud/',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    account: currentAccount,
+                    db: currentDb,
+                    table: currentTable,
+                    action: 'delete',
+                    pk_field: currentPkField,
+                    pk_value: pkValue
+                }),
+                success: function(res) {
+                    if (res.status === 'success') {
+                        alert(res.message);
+                        loadTableData(currentTable);
+                    } else {
+                        alert('刪除失敗: ' + (res.error || '未知錯誤'));
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
