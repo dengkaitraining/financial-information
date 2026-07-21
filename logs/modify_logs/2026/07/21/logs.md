@@ -1,3 +1,45 @@
+# [o] 2026-07-21 09:44
+## error message:
+### chromw browser 錯誤訊息：
+```bash
+Proxy Error
+The proxy server could not handle the request
+Reason: DNS lookup failure for: fin-backend
+```
+
+### apache_web 錯誤訊息：
+```bash
+[Tue Jul 21 01:25:38.341661 2026] [mpm_event:notice] [pid 1:tid 1] AH00489: Apache/2.4.68 (Unix) configured -- resuming normal operations
+[Tue Jul 21 01:25:38.341770 2026] [core:notice] [pid 1:tid 1] AH00094: Command line: 'httpd -D FOREGROUND'
+[Tue Jul 21 01:26:35.752031 2026] [proxy:error] [pid 11:tid 34] (EAI 3)Try again: [client 172.19.0.1:38042] AH00898: DNS lookup failure for: fin-backend returned by /
+172.19.0.1 - - [21/Jul/2026:01:26:30 +0000] "GET / HTTP/1.1" 500 303
+[Tue Jul 21 01:26:40.849374 2026] [proxy:error] [pid 11:tid 42] (EAI 3)Try again: [client 172.19.0.1:38052] AH00898: DNS lookup failure for: fin-backend returned by /favicon.ico, referer: http://localhost/
+172.19.0.1 - - [21/Jul/2026:01:26:35 +0000] "GET /favicon.ico HTTP/1.1" 500 303
+```
+
+### backend 錯誤訊息：
+```bash
+nc: getaddrinfo for host "db" port 3306: Temporary failure in name resolution
+  MariaDB 資料庫尚未就緒，等待 0.5 秒...。
+```
+
+## todo:
+### apache_web 錯誤訊息正：
+* 修改 ```file-[./apache/httpd-custom.conf]``` 設定資訊 ->
+```ini
+(**) {frontend:5173} -> {fin-frontend:5173}
+(**) {backend:8000} -> {fin-backend:8000}
+```
+
+### backend 錯誤訊息修正：
+* 修改 ```file-[./backend/entrypoint.sh]``` 設定資訊 ->
+```ini
+(50) {host = os.environ.get('DB_HOST', 'db')} -> {host = os.environ.get('DB_HOST', 'fin-db')}
+```
+
+### docker compose 啟動檔修改：
+* 修改 ```file-docker-compose.yaml``` 設定資訊 ->
+```yaml
 # ==============================================================================
 # Django + Vue.js Web 資訊系統 Docker Compose 多容器服務編排檔 (docker-compose.yaml)
 # 說明：定義 6 大服務 (自動初始化權限修復 init-dir, Apache HTTPD, Vue 3.5, Django 5.2, MariaDB 12.3, Redis 8.8)
@@ -148,3 +190,5 @@ services:
 networks:
   fin-django-net:
     driver: bridge
+
+```
