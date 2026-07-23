@@ -1,22 +1,3 @@
-# 參考 <code> Python 程式，在 Django Unfold 後台加入 Python GNews 自動加取新聞的功能，詳細資訊如<spec>。
-<spec>
- 1. GNews 模組設定參數資訊如<env>。
- 2. 新建立資料庫，名稱：「db_stock_corp」內部詳細表單資訊如<tab>，開放「user_stock」、「tb_gnew_init」使用者可「新增」、「修改」、「刪除」表單內的資料。
-</spec>
-<env>
-# GNews 模組設定參數
-language='zh-TW'
-country='TW'
-period='4h'
-max_results=100
-</env>
-<tab>
-```sql
-
-```
-</tab>
-<code>
-```python
 import logging
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -94,6 +75,3 @@ class GoogleNewsScraper:
         news_list.sort(key=lambda x: x['timestamp'], reverse=False)
         logging.info(f"成功處理 {len(news_list)} 筆新聞資料。")
         return news_list
-```
-</code>
-

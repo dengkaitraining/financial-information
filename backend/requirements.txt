@@ -20,5 +20,24 @@ django-redis
 # google new scraper套件 (github 2024年3月後有更新內容)
 gnews
 
+# FinMind
+FinMind
+
 # data analysis套件
 pandas
+
+# lxml
+#lxml>=4.9.0
+lxml
+
+# requests
+requests
+
+# yfinance
+yfinance
+
+# pymysql
+pymysql
+
+# python-dotenv
+python-dotenv

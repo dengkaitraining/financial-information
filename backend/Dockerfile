@@ -3,7 +3,9 @@
 # 說明：基於 Python 3.14 Slim 映像檔構建，安裝 C 編譯相依性與運作環境
 # ==============================================================================
 
-FROM python:3.14-slim
+#FROM python:3.14-slim
+#FinMind Python SDK 目前官方正式支援的最高版本為 Python 3.12
+FROM python:3.12-slim
 
 # 設定 Python 環境變數
 # 防止 Python 產生 .pyc 暫存檔
@@ -19,7 +21,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     default-libmysqlclient-dev \
     pkg-config \
     netcat-openbsd \
+    libxml2-dev \
+    libxslt1-dev \
+    #zlib1g-dev \
+    #python3-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# 升級 pip 與 wheel，確保能正確解析新版 CPython 的編譯標籤
+#RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 
 # 複製並升級 pip 與安裝 Python 相依套件
 COPY requirements.txt /app/
