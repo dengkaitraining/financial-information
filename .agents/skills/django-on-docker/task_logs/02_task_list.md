@@ -19,8 +19,8 @@
 | **Linux 部署** | 建立 Native Linux (Ubuntu/Debian/RHEL) 專用自動化部署與單元測試腳本 | `scripts/deploy_linux.sh` | **[x] 已完成** |
 | **macOS 部署** | 建立 macOS (Apple Silicon / Intel) 專用自動化部署與單元測試腳本 | `scripts/deploy_mac.sh` | **[x] 已完成** |
 | **Windows 部署** | 建立 Windows PowerShell 專用自動化部署與單元測試腳本 | `scripts/deploy_windows.ps1` | **[x] 已完成** |
-| **手動測試環境** | 增加 `backend_ver` 程式手動測試驗證環境，包含一鍵測試與多庫/快取驗證 | `backend/backend_ver/` | **[x] 已完成** |
-| **環境控制參數** | 增加 `SHOW_BACKEND_VER` 控制參數，開發環境顯示測試資料，正式上線隱蔽 | `.env`, `settings.py`, `backend_ver/` | **[x] 已完成** |
+| **手動測試環境** | 增加 `backend_ver` 程式手動測試驗證環境，包含一鍵測試與多庫/快取驗證，實體檔案存放在隱藏資料夾中 | `backend/.backend_ver/` | **[x] 已完成** |
+| **環境控制參數** | 增加 `SHOW_BACKEND_VER` 控制參數，開發環境顯示 `backend_ver` 軟連結，正式上線隱蔽並刪除 | `.env`, `settings.py`, `entrypoint.sh` | **[x] 已完成** |
 | **全專案註解** | 補齊全數程式與服務設定檔之詳細繁體中文註解 | 全專案代碼與設定檔 | **[x] 已完成** |
 | **Skill 與 README** | 更新 `README.md` (含跨平台部署指令) 與 Skill 規範 | `README.md`, `skills/` | **[x] 已完成** |
 

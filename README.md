@@ -234,13 +234,14 @@ docker exec django_backend python manage.py test
 ├── backend/                          # Django 5.2 後端應用程式
 │   ├── Dockerfile
 │   ├── entrypoint.sh                 # 自動判斷 Host OS (Windows/Linux/Mac) 與初始化
-│   ├── backend_ver/                  # 後端手動測試驗證環境 [NEW]
+│   ├── .backend_ver/                 # 後端手動測試驗證環境 (實體隱藏目錄) [NEW]
 │   │   ├── __init__.py               # 模組初始化檔
 │   │   ├── README.md                 # 手動測試說明文件
 │   │   ├── test_django_env.py        # Django 系統環境檢查
 │   │   ├── test_db_conn.py           # MariaDB 連線與 ORM 路由測試
 │   │   ├── test_redis_conn.py        # Redis Cache 連線測試
 │   │   └── run_all.py                # 整合測試一鍵執行器
+│   ├── backend_ver/                  # 指向 .backend_ver 之動態軟連結 (僅於 SHOW_BACKEND_VER=True 時顯現)
 │   ├── core/
 │   │   ├── db_router.py              # 多資料庫路由轉接器 (PrimaryEmployeeRouter)
 │   │   ├── settings.py               # 多 DB 設定與 Unfold 配置

@@ -51,16 +51,16 @@
 
 ## 4. 後端手動測試與驗證環境架構 (backend_ver)
 
-專案在後端容器 `fin_django_backend` 內提供了手動測試驗證模組 `backend_ver`：
+專案在後端容器 `fin_django_backend` 內提供了手動測試驗證模組 `backend_ver`，其實體檔案存放在隱藏資料夾 `.backend_ver` 中，並透過軟連結進行公開/隱蔽控制：
 1. **進入點**：透過 `docker exec -it fin_django_backend bash` / `sh` 進入容器執行。
-2. **驗證指令**：執行 `python backend_ver/run_all.py` 進行一鍵整合測試。
+2. **驗證指令**：執行 `python backend_ver/run_all.py` 進行一鍵整合測試（軟連結啟用時）。
 3. **測試模組**：
    - `test_django_env.py`：驗證系統環境與 System Check。
    - `test_db_conn.py`：驗證多資料庫路由與連線帳密讀寫權限。
    - `test_redis_conn.py`：驗證 Redis Cache API 的 Set/Get/Delete。
-4. **控制參數 (`SHOW_BACKEND_VER`)**：
-   - 測試開發環境 (`SHOW_BACKEND_VER=True`) 正常顯示所有手動測試資訊與資料。
-   - 正式上線環境 (`SHOW_BACKEND_VER=False`) 隱蔽所有手動測試資訊與資料，執行時直接拒絕並顯示安全防護警告。
+4. **控制參數 (`SHOW_BACKEND_VER`) 目錄控制**：
+   - **測試開發環境 (`SHOW_BACKEND_VER=True`)**：容器啟動時自動建立軟連結 `backend_ver -> .backend_ver`，使測試資料夾與內容正常顯現並可供執行。
+   - **正式上線環境 (`SHOW_BACKEND_VER=False`)**：容器啟動時自動刪除軟連結 `backend_ver`，徹底隱蔽測試資料夾與內容，防範敏感程式洩漏。
 
 ---
 

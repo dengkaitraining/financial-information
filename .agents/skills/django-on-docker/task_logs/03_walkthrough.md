@@ -54,11 +54,12 @@
 - **[backend/employees/tests.py](../../../../backend/employees/tests.py)**：員工 Model CRUD 與 `seed_employees` 指令單元測試。
 
 ### D. 後端手動測試驗證環境 (backend_ver)
-- **[backend/backend_ver/README.md](../../../../backend/backend_ver/README.md)**：後端手動測試環境說明文件。
-- **[backend/backend_ver/run_all.py](../../../../backend/backend_ver/run_all.py)**：整合驗證一鍵整合執行器。
-- **[backend/backend_ver/test_django_env.py](../../../../backend/backend_ver/test_django_env.py)**：Django 系統環境與自我檢查腳本。
-- **[backend/backend_ver/test_db_conn.py](../../../../backend/backend_ver/test_db_conn.py)**：MariaDB 雙資料庫與 ORM 自動路由驗證腳本。
-- **[backend/backend_ver/test_redis_conn.py](../../../../backend/backend_ver/test_redis_conn.py)**：Redis 8.8 快取與連線驗證腳本。
+- **[backend/.backend_ver/README.md](../../../../backend/.backend_ver/README.md)**：後端手動測試環境說明文件。
+- **[backend/.backend_ver/run_all.py](../../../../backend/.backend_ver/run_all.py)**：整合驗證一鍵整合執行器。
+- **[backend/.backend_ver/test_django_env.py](../../../../backend/.backend_ver/test_django_env.py)**：Django 系統環境與自我檢查腳本。
+- **[backend/.backend_ver/test_db_conn.py](../../../../backend/.backend_ver/test_db_conn.py)**：MariaDB 雙資料庫與 ORM 自動路由驗證腳本。
+- **[backend/.backend_ver/test_redis_conn.py](../../../../backend/.backend_ver/test_redis_conn.py)**：Redis 8.8 快取與連線驗證腳本。
+- **backend/backend_ver**：指向 `.backend_ver` 之動態軟連結（若 `SHOW_BACKEND_VER=True`）。
 
 ---
 
