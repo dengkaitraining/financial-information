@@ -27,7 +27,7 @@ fi
 echo "2. 端點回應數據內容："
 echo "$RESPONSE"
 
-if echo "$RESPONSE" | grep -q '"status":"online"' && echo "$RESPONSE" | grep -q '"status":"connected"'; then
+if echo "$RESPONSE" | grep -q -E '"status"[[:space:]]*:[[:space:]]*"online"' && echo "$RESPONSE" | grep -q -E '"status"[[:space:]]*:[[:space:]]*"connected"'; then
     echo "======================================================================"
     echo "🎉 所有自動化健康測試均完全通過!"
     echo "   - API 服務狀態: online"

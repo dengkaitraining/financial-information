@@ -14,6 +14,7 @@
 | **跨平台 LF 換行符號** | 強制使用 Unix `LF` 換行格式，防範 Windows 換行錯亂 | `*.sh`, `docker-compose.yaml`, `Dockerfile` | Git checkout 與腳本執行時 (由 [.gitattributes](../../../.gitattributes) 強制) |
 | **實體 Volume 掛載** | 使用相對路徑 `./db_data` 與 `./redis_data` | `docker-compose.yaml` (db, redis) | 容器持久化資料庫與快取數據時 |
 | **Vite 檔案輪詢機制** | 啟用 `watch: { usePolling: true }` 機制 | `frontend/vite.config.ts` | 於宿主機 (Windows/Linux) 開發熱更新 (HMR) 時 |
+| **手動測試資料隱蔽** | 藉由 `SHOW_BACKEND_VER` 參數控制手動測試輸出，正式環境 (False) 下隱蔽敏感資料 | `backend/backend_ver/` | 執行手動測試驗證腳本時 |
 
 ---
 

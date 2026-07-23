@@ -13,6 +13,7 @@
 | **`/admin/db-manager/api/crud/`** | DataTables CRUD API | 接收 POST JSON Payload，動態執行 SQL INSERT, UPDATE, DELETE 記錄操作 | DataTables 表單線上即時編輯時 |
 | **`netcat-openbsd (nc)`** | 網路與健康等待工具 | 對 MariaDB 3306 Port 進行 TCP 健康輪詢，確認資料庫就緒 | `entrypoint.sh` 啟動 Migration 前 |
 | **`./scripts/test_health.sh`** | 自動化測試腳本 | 自動測試根目錄純文字、API JSON 狀態、Vue 200 OK 與 `.env` 變數 | 建置完成後進行整合測試時 |
+| **`python backend_ver/run_all.py`** | 後端手動驗證整合執行器 | 一鍵驗證後端環境變數、Django 自我檢查、MariaDB 雙資料庫連線與 Redis 緩存讀寫 | 進入 `fin_django_backend` 進行後端服務與多資料庫手動測試驗證時 |
 
 ---
 

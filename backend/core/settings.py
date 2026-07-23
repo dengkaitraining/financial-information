@@ -14,6 +14,9 @@ SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-default-key')
 DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
 ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,web').split(',')
 
+# 顯示後端手動測試驗證資料的開關 (測試開發環境顯示，正式上線隱蔽)
+SHOW_BACKEND_VER = os.environ.get('SHOW_BACKEND_VER', 'True') == 'True'
+
 # ------------------------------------------------------------------------------
 # 1. 應用程式清單 (INSTALLED_APPS)
 # ------------------------------------------------------------------------------

@@ -16,6 +16,8 @@
 | **macOS 專用部署** | `./scripts/deploy_mac.sh` | 晶片架構辨識、APFS 掛載、單元測試 OK 並驗證 API | **成功 (Exit 0)** |
 | **Windows 專用部署** | `powershell -ExecutionPolicy Bypass -File ./scripts/deploy_windows.ps1` | Docker 構建、自動啟動、單元測試全數 OK 並驗證 API | **成功 (Exit 0)** |
 | **自動化健康檢測** | `./scripts/test_health.sh` | 顯示 `🎉 所有自動化健康測試均完全通過!` | **成功 (Exit 0)** |
+| **後端手動測試 (開發模式)** | `docker exec -e SHOW_BACKEND_VER=True fin_django_backend python backend_ver/run_all.py` | 顯示所有資料庫、Django 環境與 Redis 快取之驗證資訊 | **全數通過 (Exit 0)** |
+| **後端手動測試 (正式模式)** | `docker exec -e SHOW_BACKEND_VER=False fin_django_backend python backend_ver/run_all.py` | 隱蔽敏感資料，輸出正式上線隱蔽之安全防護警告並正常結束 | **成功隱蔽 (Exit 0)** |
 
 ---
 
@@ -50,6 +52,13 @@
 ### C. Django 單元測試套件
 - **[backend/core/tests.py](../../../../backend/core/tests.py)**：API 端點、多庫路由與 Redis 快取單元測試。
 - **[backend/employees/tests.py](../../../../backend/employees/tests.py)**：員工 Model CRUD 與 `seed_employees` 指令單元測試。
+
+### D. 後端手動測試驗證環境 (backend_ver)
+- **[backend/backend_ver/README.md](../../../../backend/backend_ver/README.md)**：後端手動測試環境說明文件。
+- **[backend/backend_ver/run_all.py](../../../../backend/backend_ver/run_all.py)**：整合驗證一鍵整合執行器。
+- **[backend/backend_ver/test_django_env.py](../../../../backend/backend_ver/test_django_env.py)**：Django 系統環境與自我檢查腳本。
+- **[backend/backend_ver/test_db_conn.py](../../../../backend/backend_ver/test_db_conn.py)**：MariaDB 雙資料庫與 ORM 自動路由驗證腳本。
+- **[backend/backend_ver/test_redis_conn.py](../../../../backend/backend_ver/test_redis_conn.py)**：Redis 8.8 快取與連線驗證腳本。
 
 ---
 

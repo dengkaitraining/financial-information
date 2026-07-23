@@ -270,3 +270,13 @@ description: 提供基於 Docker Compose 容器化技術之 Python Django 5.2 LT
  - windows 自動改為 windows 修復方式。
  - linux 自動改為 linux 修復方式。
  - mac 自動改為 mac 修復方式。
+
+------
+# 1. 後端容器 fin_django_backend 加入 python 程式、模組手動測試驗證的環境。
+    - 增加 backend_ver 程式手動測試驗證的環境。
+    - 以 CLI (bash 或 sh) 方式進入執行程式，如：docker exec -it fin_django_backend bash /sh。 
+
+# 1. 後端容器 fin_django_backend 加入 python 程式、模組手動測試驗證的環境。
+    - 增加 backend_ver 程式手動測試驗證的環境。
+    - 以 CLI (bash 或 sh) 方式進入執行程式，如：docker exec -it fin_django_backend bash /sh。 
+    - 增加控制參數：測試開發環境顯示 backend_ver 資料，正式上線隱蔽 backend_ver 資料。

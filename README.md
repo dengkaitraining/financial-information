@@ -23,6 +23,7 @@
 | **`init-dir` 服務** | Alpine Linux (`init-dir`) | 自動判斷 Host OS (Win/Linux/Mac) 建立目錄與權限修復 | 容器編排最優先啟動 (Completed Successfully 後觸發其他服務) |
 | **Apache HTTPD (`web`)** | Apache HTTPD `2.4-alpine` | 反向代理網頁伺服器，統一 Port 80 進入點 | 處理 `/tech-stack/`, `/`, `/admin/`, `/api/` 路由轉接 |
 | **Django Backend (`backend`)** | Python `3.11` + Django `5.2 LTS` | 後端 Web 框架、Unfold 美觀後台、REST API 與單元測試 | 提供根目錄、Unfold、`/api/status/` 端點與單元測試 |
+| **手動測試環境 (`backend_ver`)** | Python 模組與整合腳本 | 後端程式、模組與連線手動驗證測試環境 | 進入容器以 CLI 執行 `python backend_ver/run_all.py` |
 | **Vue Frontend (`frontend`)** | Vue `3.5` + TS + Tailwind `4.3` | 前端 SPA 開發伺服器 (Vite `base: /tech-stack/`) | 造訪 `http://localhost/tech-stack/` 儀表板 (含 10 分鐘自動檢測) |
 | **MariaDB (`db`)** | MariaDB `12.3` | 多關聯式 SQL 資料庫 (`user_stock_db`, `db_employee`) | 提供 `user_stock` 與 `user_employee` 雙帳號存取，掛載 `./db_data` |
 | **Redis (`redis`)** | Redis `8.8` | 快取與 Session 記憶體資料庫 (持久化至 `./redis_data`) | 處理 Django 高併發 Session 與快取資料存取 |
@@ -138,6 +139,8 @@ DJANGO_DEBUG=True
 DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,web
 DJANGO_SUPERUSER_USERNAME=admin
 DJANGO_SUPERUSER_PASSWORD=adminpassword123
+# 顯示後端手動測試驗證資料的控制開關 (True: 測試開發環境顯示 / False: 正式上線隱蔽)
+SHOW_BACKEND_VER=True
 ```
 
 ---
@@ -171,7 +174,32 @@ docker exec django_backend python manage.py test
 
 # 6. 執行線上服務健康檢測
 ./scripts/test_health.sh
+
 ```
+
+### 🛠️ 後端手動測試與驗證環境 (Manual Verification Environment)
+
+本專案在後端容器 `fin_django_backend` 內提供了 `backend_ver` 手動測試驗證模組。開發者可透過 CLI 進入容器手動執行驗證：
+
+1. **以 CLI (bash 或是 sh) 方式進入執行程式：**
+   ```bash
+   docker exec -it fin_django_backend bash
+   # 或是使用 sh 進入
+   docker exec -it fin_django_backend sh
+   ```
+2. **一鍵執行所有手動測試驗證 (環境、MariaDB、Redis)：**
+   ```bash
+   python backend_ver/run_all.py
+   ```
+3. **單獨執行特定測試腳本：**
+    * 驗證 Django 設定與系統自我檢查：`python backend_ver/test_django_env.py`
+    * 驗證 MariaDB 多資料庫與 ORM 自動路由：`python backend_ver/test_db_conn.py`
+    * 驗證 Redis 快取存取讀寫：`python backend_ver/test_redis_conn.py`
+
+4. **環境控制參數 (`SHOW_BACKEND_VER`) 安全防護：**
+   - 藉由 `.env` 中之 `SHOW_BACKEND_VER` 參數進行安全控制。
+   - **測試開發環境 (`SHOW_BACKEND_VER=True`)**：執行上述測試腳本時，會如常輸出所有細部連線狀態、系統檢查結果、MariaDB 連線使用者及資料庫中的員工/使用者資料筆數與範例。
+   - **正式上線環境 (`SHOW_BACKEND_VER=False`)**：為了避免敏感資料外洩，若偵測到該變數為 `False`，所有驗證腳本皆會拒絕執行並輸出 `🔒 [安全防護] 正式上線環境已隱蔽手動測試驗證資料。` 安全警告，達到資訊隱蔽效果。
 
 ### 本地服務連線網址一覽
 
@@ -206,6 +234,13 @@ docker exec django_backend python manage.py test
 ├── backend/                          # Django 5.2 後端應用程式
 │   ├── Dockerfile
 │   ├── entrypoint.sh                 # 自動判斷 Host OS (Windows/Linux/Mac) 與初始化
+│   ├── backend_ver/                  # 後端手動測試驗證環境 [NEW]
+│   │   ├── __init__.py               # 模組初始化檔
+│   │   ├── README.md                 # 手動測試說明文件
+│   │   ├── test_django_env.py        # Django 系統環境檢查
+│   │   ├── test_db_conn.py           # MariaDB 連線與 ORM 路由測試
+│   │   ├── test_redis_conn.py        # Redis Cache 連線測試
+│   │   └── run_all.py                # 整合測試一鍵執行器
 │   ├── core/
 │   │   ├── db_router.py              # 多資料庫路由轉接器 (PrimaryEmployeeRouter)
 │   │   ├── settings.py               # 多 DB 設定與 Unfold 配置
@@ -239,6 +274,7 @@ docker exec django_backend python manage.py test
 | **API 端點檢查** | `curl -s http://localhost/api/status/` | JSON 檔返回 `database` 與 `redis` 皆為 `"connected"` 成功訊息 | **✓ 通過 (200 OK)** |
 | **頁面功能檢查** | `curl -sI http://localhost/tech-stack/` | `/tech-stack/` 回應 HTTP 200，出現所有技術堆疊圖標與儀表板卡片 | **✓ 通過 (200 OK)** |
 | **自動化健康測試** | 執行 `./scripts/test_health.sh` | 終端機顯示 `🎉 所有自動化健康測試均完全通過!` | **✓ 通過 (Exit 0)** |
+| **後端手動測試** | `docker exec fin_django_backend python backend_ver/run_all.py` | 輸出包含 Django 環境、MariaDB 雙庫、Redis 連線之驗證資訊，且全數顯示 🟢 / ✓ | **✓ 通過** |
 | **環境變數檢查** | 檢查 `.env` 設定檔 | 確認是否有設定 `DJANGO_DEBUG=True` 與 `DJANGO_ALLOWED_HOSTS` 包含 `localhost` 或 `*` | **✓ 通過** |
 
 ---
