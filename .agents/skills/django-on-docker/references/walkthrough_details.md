@@ -38,6 +38,20 @@
    - `test_redis_conn.py`: 使用 `django_redis` 連線，透過快取讀寫刪除 (Set/Get/Delete) 確保 Redis 機制運作如預期。
 3. **整合報告：** 執行 `run_all.py` 會串聯上述三者，自動格式化輸出結果，方便開發人員與系統維運人員在進行系統微調、資料庫移轉或 Host OS 環境變更時快速定位問題。
 
+## 4. 前端手動測試與驗證環境 (frontend_ver)
+
+專案內建的 `frontend_ver` 模組提供前端容器內的獨立驗證：
+1. **進入容器：** 透過 `docker exec -it fin_vue_frontend sh` 直接進入前端容器（亦可執行 `./enter_dc.sh`）。
+2. **驗證腳本執行：**
+   - `test_env.js`: 驗證 Node 執行環境與 Docker 容器內部的環境變數載入狀態。
+   - `test_api.js`: 對後端健康檢測 API 端點執行請求，確認前後端容器間的網路通訊及跨容器 API 呼叫功能。
+   - `test_web.js`: 模擬外部對網頁代理伺服器的連線，驗證 Apache 反向代理轉接前端 Vite 開發伺服器是否暢通。
+3. **整合報告：** 可透過執行 `node frontend_ver/run_all.js` 或是 `./frontend_ver/run_all.sh` 一鍵執行前述所有前端健康檢查。
+
+## 5. 快捷容器進入工具 (enter_dc.sh)
+
+在專案根目錄提供了互動式 CLI 進入腳本 [enter_dc.sh](file:///home/dengkai/projects/financial-information/enter_dc.sh)，開發者在宿主機只需執行 `bash enter_dc.sh` 並輸入容器名稱（如：`fin_django_backend`），即可快速開啟容器內的 CLI 終端，無須記憶冗長的 `docker exec` 語法。
+
 ---
 
 ## 相關文件連結

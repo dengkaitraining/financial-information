@@ -5,6 +5,8 @@
 
 FROM node:20-alpine
 
+RUN apk add --no-cache bash
+
 WORKDIR /app
 
 # 複製 package.json 並安裝 Node.js 套件相依性

@@ -6,18 +6,21 @@
 
 ## 1. 服務連線與自動化測試結果對照表
 
-已透過 `docker exec django_backend python manage.py test` 與跨平台部署腳本測試驗證全數運作正常：
+已透過單元測試與手動/自動化腳本驗證全數服務運作正常：
 
-| 測試分類 | 測試網址 / 腳本 | 預期回應 / 測試數 | 實測驗證結果 |
+| 測試分類 | 測試網址 / 腳本 / 指令 | 預期回應 / 測試數 | 實測驗證結果 |
 | :--- | :--- | :--- | :--- |
-| **Django 單元測試** | `docker exec django_backend python manage.py test` | 9 個單元測試案例 (包含端點、多庫路由、快取與員工 Model) | **全數通過 (Ran 9 tests in 0.101s OK)** |
+| **Django 單元測試** | `docker exec fin_django_backend python manage.py test` | 9 個單元測試案例 (包含端點、多庫路由、快取與員工 Model) | **全數通過 (Ran 9 tests OK)** |
 | **統一部署進入點** | `./scripts/deploy.sh` | 自動辨識宿主機 OS 並自動分流執行對應腳本 | **成功 (Exit 0)** |
 | **Linux 專用部署** | `./scripts/deploy_linux.sh` | 賦權、Docker 構建、單元測試全數 OK 並驗證 API | **成功 (Exit 0)** |
 | **macOS 專用部署** | `./scripts/deploy_mac.sh` | 晶片架構辨識、APFS 掛載、單元測試 OK 並驗證 API | **成功 (Exit 0)** |
 | **Windows 專用部署** | `powershell -ExecutionPolicy Bypass -File ./scripts/deploy_windows.ps1` | Docker 構建、自動啟動、單元測試全數 OK 並驗證 API | **成功 (Exit 0)** |
 | **自動化健康檢測** | `./scripts/test_health.sh` | 顯示 `🎉 所有自動化健康測試均完全通過!` | **成功 (Exit 0)** |
 | **後端手動測試 (開發模式)** | `docker exec -e SHOW_BACKEND_VER=True fin_django_backend python backend_ver/run_all.py` | 顯示所有資料庫、Django 環境與 Redis 快取之驗證資訊 | **全數通過 (Exit 0)** |
-| **後端手動測試 (正式模式)** | `docker exec -e SHOW_BACKEND_VER=False fin_django_backend python backend_ver/run_all.py` | 隱蔽敏感資料，輸出正式上線隱蔽之安全防護警告並正常結束 | **成功隱蔽 (Exit 0)** |
+| **後端手動測試 (正式模式)** | `docker exec -e SHOW_BACKEND_VER=False fin_django_backend python backend_ver/run_all.py` | 隱蔽敏感資料，移除軟連結且執行時提示找不到路徑 | **成功隱蔽 (Exit 0)** |
+| **前端手動測試 (開發模式)** | `docker exec -e SHOW_FRONTEND_VER=True fin_vue_frontend node frontend_ver/run_all.js` | 顯示 Node 環境、API 端點連線、Apache 代理與網頁健康度驗證 | **全數通過 (Exit 0)** |
+| **前端手動測試 (正式模式)** | `docker exec -e SHOW_FRONTEND_VER=False fin_vue_frontend node frontend_ver/run_all.js` | 軟連結移除，執行時提示找不到路徑，達到隱蔽效果 | **成功隱蔽 (Exit 0)** |
+| **快捷容器進入測試** | 執行 `bash enter_dc.sh`，依提示輸入容器名稱，驗證能否順利進入其 shell 環境 | 順利開啟目標容器的 bash 或是 sh 終端環境 | **成功 (Exit 0)** |
 
 ---
 
@@ -38,8 +41,9 @@
 ## 3. 專案全檔案相對路徑連結索引
 
 ### A. 全局與環境變數設定檔
-- **[.env](../../../../.env)**：全局變數，包含 `user_stock` 與 `user_employee` 憑證。
+- **[.env](../../../../.env)**：全局變數，包含 `user_stock`、`user_employee` 憑證與 `SHOW_BACKEND_VER`、`SHOW_FRONTEND_VER` 控制開關。
 - **[docker-compose.yaml](../../../../docker-compose.yaml)**：6 大服務編排檔，包含 `init-dir` 自動初始化與實體目錄 `./db_data`。
+- **[enter_dc.sh](../../../../enter_dc.sh)**：快速進入 Docker 容器之互動式輔助腳本。
 
 ### B. 跨平台單元測試與部署腳本
 - **[scripts/init_dir.sh](../../../../scripts/init_dir.sh)**：自動初始化目錄與跨 OS 權限修復腳本 (init-dir 服務專用)。
@@ -60,6 +64,14 @@
 - **[backend/.backend_ver/test_db_conn.py](../../../../backend/.backend_ver/test_db_conn.py)**：MariaDB 雙資料庫與 ORM 自動路由驗證腳本。
 - **[backend/.backend_ver/test_redis_conn.py](../../../../backend/.backend_ver/test_redis_conn.py)**：Redis 8.8 快取與連線驗證腳本。
 - **backend/backend_ver**：指向 `.backend_ver` 之動態軟連結（若 `SHOW_BACKEND_VER=True`）。
+
+### E. 前端手動測試驗證環境 (frontend_ver)
+- **[frontend/.frontend_ver/run_all.js](../../../../frontend/.frontend_ver/run_all.js)**：Node 一鍵整合執行器。
+- **[frontend/.frontend_ver/run_all.sh](../../../../frontend/.frontend_ver/run_all.sh)**：Shell 一鍵整合腳本。
+- **[frontend/.frontend_ver/test_env.js](../../../../frontend/.frontend_ver/test_env.js)**：Node 環境與環境變數驗證。
+- **[frontend/.frontend_ver/test_api.js](../../../../frontend/.frontend_ver/test_api.js)**：API 健康回應狀態檢測。
+- **[frontend/.frontend_ver/test_web.js](../../../../frontend/.frontend_ver/test_web.js)**：Apache 代理與前端健康檢測。
+- **frontend/frontend_ver**：指向 `.frontend_ver` 之動態軟連結（若 `SHOW_FRONTEND_VER=True`）。
 
 ---
 

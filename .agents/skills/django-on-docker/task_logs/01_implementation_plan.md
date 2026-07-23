@@ -52,19 +52,43 @@
 ## 4. 後端手動測試與驗證環境架構 (backend_ver)
 
 專案在後端容器 `fin_django_backend` 內提供了手動測試驗證模組 `backend_ver`，其實體檔案存放在隱藏資料夾 `.backend_ver` 中，並透過軟連結進行公開/隱蔽控制：
-1. **進入點**：透過 `docker exec -it fin_django_backend bash` / `sh` 進入容器執行。
+1. **進入點**：透過 `docker exec -it fin_django_backend bash` / `sh` 進入容器執行（亦可透過 `enter_dc.sh`）。
 2. **驗證指令**：執行 `python backend_ver/run_all.py` 進行一鍵整合測試（軟連結啟用時）。
 3. **測試模組**：
    - `test_django_env.py`：驗證系統環境與 System Check。
    - `test_db_conn.py`：驗證多資料庫路由與連線帳密讀寫權限。
    - `test_redis_conn.py`：驗證 Redis Cache API 的 Set/Get/Delete。
+   - `gnews_scraper/`：手動新聞爬取測試模組 (包含 gnews 與 pandas 套件之安裝驗證)。
 4. **控制參數 (`SHOW_BACKEND_VER`) 目錄控制**：
    - **測試開發環境 (`SHOW_BACKEND_VER=True`)**：容器啟動時自動建立軟連結 `backend_ver -> .backend_ver`，使測試資料夾與內容正常顯現並可供執行。
    - **正式上線環境 (`SHOW_BACKEND_VER=False`)**：容器啟動時自動刪除軟連結 `backend_ver`，徹底隱蔽測試資料夾與內容，防範敏感程式洩漏。
 
 ---
 
-## 5. URL 路由對照表
+## 5. 前端手動測試與驗證環境架構 (frontend_ver)
+
+專案在前端容器 `fin_vue_frontend` 內提供了手動測試驗證模組 `frontend_ver`，其實體檔案存放在隱藏資料夾 `.frontend_ver` 中，並透過軟連結進行公開/隱蔽控制：
+1. **進入點**：透過 `docker exec -it fin_vue_frontend sh` 進入容器執行（亦可透過 `enter_dc.sh`）。
+2. **驗證指令**：執行 `node frontend_ver/run_all.js` 或是 `sh frontend_ver/run_all.sh` 進行一鍵整合測試。
+3. **測試模組**：
+   - `test_env.js`：驗證前端 Node 環境與環境變數。
+   - `test_api.js`：驗證後端 API 連線與健康回應狀態。
+   - `test_web.js`：驗證 Apache HTTPD 反向代理與網頁健康。
+4. **控制參數 (`SHOW_FRONTEND_VER`) 目錄控制**：
+   - **測試開發環境 (`SHOW_FRONTEND_VER=True`)**：容器啟動時自動建立軟連結 `frontend_ver -> .frontend_ver`，使測試資料夾與內容正常顯現並可供執行。
+   - **正式上線環境 (`SHOW_FRONTEND_VER=False`)**：容器啟動時自動刪除軟連結 `frontend_ver`，徹底隱蔽前端測試資料夾與內容，防範敏感腳本外洩。
+
+---
+
+## 6. 互動式快捷進入工具 (enter_dc.sh)
+
+在專案根目錄下建立了 `enter_dc.sh` 互動式 CLI 腳本，簡化開發者進入 Docker 容器的步驟：
+- 執行 `bash enter_dc.sh`。
+- 輸入目標容器名稱後，腳本會自動選取適合的終端核心（`bash` 優先，失敗則回退使用 `sh`）進入。
+
+---
+
+## 7. URL 路由對照表
 
 | 造訪網址 (URL) | 轉接目標服務 | 預期回應與功能說明 | 權限要求 |
 | :--- | :--- | :--- | :--- |

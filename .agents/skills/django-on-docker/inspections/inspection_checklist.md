@@ -26,8 +26,10 @@
 | **DataTables 管理員** | `http://localhost/admin/db-manager/` | 存取 `/admin/db-manager/` | 檢查帳號切換 (`user_stock`/`user_employee`)、SHOW DATABASES & DataTables CRUD | **通過 (200 OK/302)** |
 | **群組權限管制** | `can_manage_db_tables` 權限 | 測試非授權使用者連線 | 回傳 HTTP 403 Forbidden 拒絕存取 | **通過 (403)** |
 | **自動化測試腳本** | `./scripts/test_health.sh` | 執行 `./scripts/test_health.sh` | 顯示 `🎉 所有自動化健康測試均完全通過!` | **通過 (Exit 0)** |
-| **後端手動測試** | `python backend_ver/run_all.py` | 進入 `fin_django_backend` 執行驗證 | Django 檢查、DB 雙庫讀寫、Redis 測試皆順利通過並回傳成功狀態 | **通過** |
-| **環境變數檢查** | `.env` 設定檔 | 檢查 `.env` | `DJANGO_DEBUG=True` 且 `DJANGO_ALLOWED_HOSTS` 包含 `localhost` 或 `*` | **通過** |
+| **後端手動測試** | `python backend_ver/run_all.py` | 進入 `fin_django_backend` 執行驗證 | Django 檢查、DB 雙庫讀寫、Redis 測試、GNews 爬蟲測試皆順利通過 | **通過** |
+| **前端手動測試** | `node frontend_ver/run_all.js` | 進入 `fin_vue_frontend` 執行驗證 | Node 環境、API 連線、Apache 網頁健康檢測皆通過 | **通過** |
+| **快捷進入工具** | `bash enter_dc.sh` | 於宿主機執行並輸入目標容器名稱 | 順利開啟目標容器 terminal shell | **通過** |
+| **環境變數檢查** | `.env` 設定檔 | 檢查 `.env` | `DJANGO_DEBUG=True`、`SHOW_BACKEND_VER=True` 且 `SHOW_FRONTEND_VER=True` | **通過** |
 
 ---
 

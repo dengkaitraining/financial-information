@@ -28,6 +28,9 @@ backend/backend_ver
 backend/.backend_ver/gnews_scraper/v1/news/
 backend/.backend_ver/gnews_scraper/v2/news/
 backend/.backend_ver/gnews_scraper/v2/logs/
+frontend/entrypoint.sh
+frontend/frontend_ver
+
 
 # Django
 staticfiles/

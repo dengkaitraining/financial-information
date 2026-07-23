@@ -55,9 +55,11 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
+    env_file:
+      - .env
     environment:
       - NODE_ENV=development
-    command: [ "npm", "run", "dev" ]
+    command: [ "sh", "/app/entrypoint.sh" ]
     depends_on:
       fin-init-dir:
         condition: service_completed_successfully

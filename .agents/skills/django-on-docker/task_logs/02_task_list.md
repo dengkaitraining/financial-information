@@ -19,8 +19,12 @@
 | **Linux 部署** | 建立 Native Linux (Ubuntu/Debian/RHEL) 專用自動化部署與單元測試腳本 | `scripts/deploy_linux.sh` | **[x] 已完成** |
 | **macOS 部署** | 建立 macOS (Apple Silicon / Intel) 專用自動化部署與單元測試腳本 | `scripts/deploy_mac.sh` | **[x] 已完成** |
 | **Windows 部署** | 建立 Windows PowerShell 專用自動化部署與單元測試腳本 | `scripts/deploy_windows.ps1` | **[x] 已完成** |
-| **手動測試環境** | 增加 `backend_ver` 程式手動測試驗證環境，包含一鍵測試與多庫/快取驗證，實體檔案存放在隱藏資料夾中 | `backend/.backend_ver/` | **[x] 已完成** |
-| **環境控制參數** | 增加 `SHOW_BACKEND_VER` 控制參數，開發環境顯示 `backend_ver` 軟連結，正式上線隱蔽並刪除 | `.env`, `settings.py`, `entrypoint.sh` | **[x] 已完成** |
+| **手動測試環境 (Python)** | 增加 `backend_ver` 程式手動測試驗證環境，包含一鍵測試與多庫/快取驗證，實體檔案在 `.backend_ver/` 隱藏目錄 | `backend/.backend_ver/` | **[x] 已完成** |
+| **環境控制參數 (Python)** | 增加 `SHOW_BACKEND_VER` 控制參數，開發環境顯示 `backend_ver` 軟連結，正式上線隱蔽並刪除 | `.env`, `settings.py`, `entrypoint.sh` | **[x] 已完成** |
+| **手動測試環境 (Vue)** | 增加 `frontend_ver` 前端手動測試驗證環境，驗證 Node 環境、API 端點連線與 Apache 代理 | `frontend/.frontend_ver/` | **[x] 已完成** |
+| **環境控制參數 (Vue)** | 增加 `SHOW_FRONTEND_VER` 控制參數，開發環境顯示 `frontend_ver` 軟連結，正式上線隱蔽並刪除 | `.env`, `frontend/entrypoint.sh` | **[x] 已完成** |
+| **快速進入容器工具** | 增加根目錄 `enter_dc.sh` 互動式 CLI 腳本，方便快速進入各個容器之 shell 端點 | `enter_dc.sh` | **[x] 已完成** |
+| **第三方套件整合** | 增加 `gnews` 爬蟲套件與 `pandas` 資料分析套件，並整合進後端手動測試驗證環境 | `backend/requirements.txt` | **[x] 已完成** |
 | **全專案註解** | 補齊全數程式與服務設定檔之詳細繁體中文註解 | 全專案代碼與設定檔 | **[x] 已完成** |
 | **Skill 與 README** | 更新 `README.md` (含跨平台部署指令) 與 Skill 規範 | `README.md`, `skills/` | **[x] 已完成** |
 
@@ -41,6 +45,10 @@
 - [x] 輸出專案文件至 `./task_logs/` (`01_implementation_plan.md`, `02_task_list.md`, `03_walkthrough.md`)
 - [x] 建立 `backend_ver` 後端手動測試驗證環境與一鍵整合測試執行器 (`run_all.py`)
 - [x] 整合 `SHOW_BACKEND_VER` 控制參數，驗證正式上線隱蔽與開發環境顯示功能
+- [x] 建立 `frontend_ver` 前端手動測試驗證環境與一鍵整合測試執行器 (`run_all.js`, `run_all.sh`)
+- [x] 整合 `SHOW_FRONTEND_VER` 控制參數，驗證前端正式上線隱蔽與開發環境顯示功能
+- [x] 建立 `enter_dc.sh` 快速容器進入工具並測試其可行性
+- [x] 整合 `gnews` 與 `pandas` 第三方套件至後端環境，並完成相關爬蟲測試腳本之放置
 - [x] 建立與維護最新版 [README.md](../../../../README.md) (含跨平台部署指令、Mermaid 架構圖與說明)
 
 ---

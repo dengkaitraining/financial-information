@@ -23,11 +23,13 @@
 | **`init-dir` 服務** | Alpine Linux (`init-dir`) | 自動判斷 Host OS (Win/Linux/Mac) 建立目錄與權限修復 | 容器編排最優先啟動 (Completed Successfully 後觸發其他服務) |
 | **Apache HTTPD (`web`)** | Apache HTTPD `2.4-alpine` | 反向代理網頁伺服器，統一 Port 80 進入點 | 處理 `/tech-stack/`, `/`, `/admin/`, `/api/` 路由轉接 |
 | **Django Backend (`backend`)** | Python `3.11` + Django `5.2 LTS` | 後端 Web 框架、Unfold 美觀後台、REST API 與單元測試 | 提供根目錄、Unfold、`/api/status/` 端點與單元測試 |
-| **手動測試環境 (`backend_ver`)** | Python 模組與整合腳本 | 後端程式、模組與連線手動驗證測試環境 | 進入容器以 CLI 執行 `python backend_ver/run_all.py` |
+| **手動測試環境 (`backend_ver`)** | Python 模組與整合腳本 | 後端程式、模組與連線手動驗證測試環境，包含 GNews 爬蟲測試 | 進入容器以 CLI 執行 `python backend_ver/run_all.py` |
+| **手動測試環境 (`frontend_ver`)** | Node/JS 模組與整合腳本 | 前端 Vue 環境、環境變數與 API 埠口健康度手動驗證環境 | 進入前端容器執行 `node frontend_ver/run_all.js` |
 | **Vue Frontend (`frontend`)** | Vue `3.5` + TS + Tailwind `4.3` | 前端 SPA 開發伺服器 (Vite `base: /tech-stack/`) | 造訪 `http://localhost/tech-stack/` 儀表板 (含 10 分鐘自動檢測) |
 | **MariaDB (`db`)** | MariaDB `12.3` | 多關聯式 SQL 資料庫 (`user_stock_db`, `db_employee`) | 提供 `user_stock` 與 `user_employee` 雙帳號存取，掛載 `./db_data` |
 | **Redis (`redis`)** | Redis `8.8` | 快取與 Session 記憶體資料庫 (持久化至 `./redis_data`) | 處理 Django 高併發 Session 與快取資料存取 |
 | **目錄與權限修復腳本** | Shell (`./scripts/init_dir.sh`) | 自動判斷 Windows (NTFS)、macOS (APFS) 或 Linux 原生權限修復 | `init-dir` 容器啟動時自動執行 |
+| **快速容器進入工具 (`enter_dc.sh`)** | Shell 互動式指令腳本 | 提供互動式 CLI 輸入以快速進入指定的 Docker 容器 | 於宿主機執行 `bash enter_dc.sh` |
 | **跨平台統一部署進入點** | Shell (`./scripts/deploy.sh`) | 跨平台自動偵測 Host OS 並轉接專屬部署與單元測試 | 執行 `./scripts/deploy.sh` (Linux, macOS, Git Bash, WSL) |
 | **Windows 平台部署專用** | PowerShell (`./scripts/deploy_windows.ps1`) | Windows 10/11 專屬部署與單元測試流程 (WSL2/NTFS 適配) | 執行 `powershell -ExecutionPolicy Bypass -File ./scripts/deploy_windows.ps1` |
 | **Linux 平台部署專用** | Shell (`./scripts/deploy_linux.sh`) | Linux 專屬原生 Docker Engine 高效能部署與單元測試 | 執行 `./scripts/deploy_linux.sh` (Ubuntu / Debian / RHEL) |
@@ -195,11 +197,55 @@ docker exec django_backend python manage.py test
     * 驗證 Django 設定與系統自我檢查：`python backend_ver/test_django_env.py`
     * 驗證 MariaDB 多資料庫與 ORM 自動路由：`python backend_ver/test_db_conn.py`
     * 驗證 Redis 快取存取讀寫：`python backend_ver/test_redis_conn.py`
+    * 驗證 Google News 爬蟲功能 (GNews + Pandas)：可以使用隱藏資料夾下 `.backend_ver/gnews_scraper/` 內 v1/v2 版本的 Scraper 進行手動新聞爬取測試。
 
-4. **環境控制參數 (`SHOW_BACKEND_VER`) 安全防護：**
+4. **環境控制參數 (`SHOW_BACKEND_VER`) 目錄隱蔽：**
    - 藉由 `.env` 中之 `SHOW_BACKEND_VER` 參數進行安全控制。
-   - **測試開發環境 (`SHOW_BACKEND_VER=True`)**：執行上述測試腳本時，會如常輸出所有細部連線狀態、系統檢查結果、MariaDB 連線使用者及資料庫中的員工/使用者資料筆數與範例。
-   - **正式上線環境 (`SHOW_BACKEND_VER=False`)**：為了避免敏感資料外洩，若偵測到該變數為 `False`，所有驗證腳本皆會拒絕執行並輸出 `🔒 [安全防護] 正式上線環境已隱蔽手動測試驗證資料。` 安全警告，達到資訊隱蔽效果。
+   - **測試開發環境 (`SHOW_BACKEND_VER=True`)**：容器啟動時自動建立軟連結 `backend_ver -> .backend_ver`，使測試資料夾與內容正常顯現並可供執行。
+   - **正式上線環境 (`SHOW_BACKEND_VER=False`)**：容器啟動時自動刪除軟連結 `backend_ver`，徹底隱蔽測試資料夾與內容，防範敏感程式洩漏。
+
+---
+
+### 🛠️ 前端手動測試與驗證環境 (Frontend Manual Verification Environment)
+
+本專案在前端容器 `fin_vue_frontend` 內提供了 `frontend_ver` 手動測試驗證模組，實體檔案存放在隱藏資料夾 `.frontend_ver` 中，並透過軟連結進行公開/隱蔽控制：
+
+1. **以 CLI (bash 或是 sh) 方式進入執行程式：**
+   ```bash
+   docker exec -it fin_vue_frontend sh
+   ```
+2. **一鍵執行所有前端手動測試驗證 (環境變數、API、Apache 代理)：**
+   ```bash
+   # 執行 node 整合執行器
+   node frontend_ver/run_all.js
+   
+   # 或執行 shell 一鍵整合測試
+   sh frontend_ver/run_all.sh
+   ```
+3. **單獨執行特定測試腳本：**
+   * 驗證前端 Node 環境與環境變數：`node frontend_ver/test_env.js`
+   * 驗證後端 API 連線與健康回應：`node frontend_ver/test_api.js`
+   * 驗證 Apache 反向代理與 Vue 本地網頁健康：`node frontend_ver/test_web.js`
+
+4. **環境控制參數 (`SHOW_FRONTEND_VER`) 目錄隱蔽：**
+   - 藉由 `.env` 中之 `SHOW_FRONTEND_VER` 參數進行安全控制。
+   - **測試開發環境 (`SHOW_FRONTEND_VER=True`)**：容器啟動時自動建立軟連結 `frontend_ver -> .frontend_ver`，使測試資料夾與內容正常顯現並可供執行。
+   - **正式上線環境 (`SHOW_FRONTEND_VER=False`)**：容器啟動時自動刪除軟連結 `frontend_ver`，徹底隱蔽前端測試資料夾與內容，防範敏感測試腳本洩漏。
+
+---
+
+### 🚪 快捷容器進入工具 (Quick Container CLI Entry)
+
+專案根目錄下提供了互動式輔助腳本 [enter_dc.sh](file:///home/dengkai/projects/financial-information/enter_dc.sh)，能讓開發者快速進入指定的 Docker 容器：
+
+```bash
+# 於宿主機執行互動式進入腳本
+bash enter_dc.sh
+
+# 根據提示輸入容器名稱，如：fin_django_backend 或 fin_vue_frontend，腳本將自動選擇 bash / sh 進入容器終端。
+```
+
+---
 
 ### 本地服務連線網址一覽
 
@@ -218,7 +264,8 @@ docker exec django_backend python manage.py test
 .
 ├── .env                              # 全局環境變數 (含 user_stock & user_employee 憑證)
 ├── .gitattributes                    # 強制 LF 換行規範 (跨平台支援)
-├── .gitignore                        # Git 忽略檔規範
+├── .gitignore                        # Git 忽略檔規範 (已排除手動測試軟連結與 gnews 產出目錄)
+├── enter_dc.sh                       # 快速進入 Docker 容器之互動式輔助腳本 [NEW]
 ├── docker-compose.yaml               # 6 大容器服務編排檔 (含 init-dir 自動初始化目錄與權限修復服務)
 ├── README.md                         # 專案詳細說明文件檔
 ├── scripts/
@@ -240,7 +287,10 @@ docker exec django_backend python manage.py test
 │   │   ├── test_django_env.py        # Django 系統環境檢查
 │   │   ├── test_db_conn.py           # MariaDB 連線與 ORM 路由測試
 │   │   ├── test_redis_conn.py        # Redis Cache 連線測試
-│   │   └── run_all.py                # 整合測試一鍵執行器
+│   │   ├── run_all.py                # 整合測試一鍵執行器
+│   │   └── gnews_scraper/            # Google 新聞爬取測試模組 [NEW]
+│   │       ├── v1/                   # v1 版本 (gnews_scraper.py, py_timestamp.py)
+│   │       └── v2/                   # v2 版本 (main.py, news_scraper.py, cli_app.py)
 │   ├── backend_ver/                  # 指向 .backend_ver 之動態軟連結 (僅於 SHOW_BACKEND_VER=True 時顯現)
 │   ├── core/
 │   │   ├── db_router.py              # 多資料庫路由轉接器 (PrimaryEmployeeRouter)
@@ -253,6 +303,15 @@ docker exec django_backend python manage.py test
 │       ├── tests.py                  # Employee Model CRUD 與 seed_employees 單元測試
 │       └── management/commands/seed_employees.py # 10 筆測試員工生成指令
 ├── frontend/                         # Vue 3.5 前端應用程式
+│   ├── Dockerfile
+│   ├── entrypoint.sh                 # 前端啟動程序與環境變數判斷 (含 SHOW_FRONTEND_VER 軟連結控制)
+│   ├── .frontend_ver/                # 前端手動測試驗證環境 (實體隱藏目錄) [NEW]
+│   │   ├── run_all.js                # 一鍵整合測試 JS 執行器
+│   │   ├── run_all.sh                # 一鍵整合測試 Shell 腳本
+│   │   ├── test_env.js               # 前端 Node/環境變數驗證
+│   │   ├── test_api.js               # 後端 API 健康連線回應驗證
+│   │   └── test_web.js               # Apache HTTPD 反向代理與前端網頁健康驗證
+│   ├── frontend_ver/                 # 指向 .frontend_ver 之動態軟連結 (僅於 SHOW_FRONTEND_VER=True 時顯現)
 │   └── src/App.vue                   # 前端 Dashboard 介面 (10 分鐘自動檢測)
 ├── db_data/                          # MariaDB 12.3 實體目錄持久化區 (Git 忽略)
 └── redis_data/                       # Redis 8.8 實體目錄持久化區 (Git 忽略)
@@ -276,7 +335,8 @@ docker exec django_backend python manage.py test
 | **頁面功能檢查** | `curl -sI http://localhost/tech-stack/` | `/tech-stack/` 回應 HTTP 200，出現所有技術堆疊圖標與儀表板卡片 | **✓ 通過 (200 OK)** |
 | **自動化健康測試** | 執行 `./scripts/test_health.sh` | 終端機顯示 `🎉 所有自動化健康測試均完全通過!` | **✓ 通過 (Exit 0)** |
 | **後端手動測試** | `docker exec fin_django_backend python backend_ver/run_all.py` | 輸出包含 Django 環境、MariaDB 雙庫、Redis 連線之驗證資訊，且全數顯示 🟢 / ✓ | **✓ 通過** |
-| **環境變數檢查** | 檢查 `.env` 設定檔 | 確認是否有設定 `DJANGO_DEBUG=True` 與 `DJANGO_ALLOWED_HOSTS` 包含 `localhost` 或 `*` | **✓ 通過** |
+| **前端手動測試** | `docker exec fin_vue_frontend node frontend_ver/run_all.js` | 輸出包含 Node 環境、API 連線、Apache 代理網頁健康之驗證資訊 | **✓ 通過** |
+| **環境變數檢查** | 檢查 `.env` 設定檔 | 確認是否有設定 `DJANGO_DEBUG=True`、`SHOW_BACKEND_VER=True` 與 `SHOW_FRONTEND_VER=True` | **✓ 通過** |
 
 ---
 

@@ -16,9 +16,11 @@ description: 提供基於 Docker Compose 容器化技術之 Python Django 5.2 LT
 | **`web`** | Apache HTTPD 2.4-alpine | 反向代理網頁伺服器，統一 Port 80 進入點 | 處理 `/tech-stack/`, `/`, `/admin/`, `/api/` |
 | **`backend`** | Python 3.11 + Django 5.2 LTS | 後端網頁框架、Unfold 美觀後台、REST API 與單元測試 | 提供純文字、Unfold、`employees` 管理 API 與 9 項單元測試 |
 | **`backend_ver`** | Python 3.11 + 軟連結與隱藏資料夾 | 後端程式手動測試驗證環境，藉由 `SHOW_BACKEND_VER` 參數控制 `backend_ver` 軟連結之顯示與隱蔽 | 開發測試環境（`True`）下進入 `fin_django_backend` 執行 `python backend_ver/run_all.py` |
+| **`frontend_ver`** | Node/JS + 軟連結與隱藏資料夾 | 前端環境手動測試驗證環境，藉由 `SHOW_FRONTEND_VER` 參數控制 `frontend_ver` 軟連結之顯示與隱蔽 | 開發測試環境（`True`）下進入 `fin_vue_frontend` 執行 `node frontend_ver/run_all.js` |
 | **`frontend`** | Vue 3.5 + TS + Tailwind v4.3 | 前端 SPA 開發伺服器 (Vite `base: /tech-stack/`) | 造訪 `http://localhost/tech-stack/` 儀表板 (含 10 分鐘自動檢測) |
 | **`db`** | MariaDB 12.3 | 多關聯式 SQL 資料庫 (`user_stock_db`, `db_employee`) | 提供 `user_stock` 與 `user_employee` 多帳號權限管理，掛載 `./db_data` |
 | **`redis`** | Redis 8.8 | 快取與 Session 高併發記憶體資料庫 (掛載 `./redis_data`) | 處理 Django 高併發 Session 與快取資料存取 |
+| **`enter_dc.sh`** | Shell 互動式指令腳本 | 宿主機快捷容器進入輔助工具 | 於宿主機執行 `bash enter_dc.sh` 快速進入容器 |
 | **`scripts`** | Shell & PowerShell | 跨平台一鍵自動化部署與單元測試作業腳本 | 執行 `scripts/deploy.sh` (Linux/Mac/WSL) 或 `deploy_windows.ps1` |
 
 ---

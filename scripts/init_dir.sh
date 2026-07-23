@@ -24,7 +24,7 @@ fi
 
 # 2. 定義需要初始化的資料與設定目錄
 #TARGET_DIRS="/app/db_data /app/redis_data /app/backend /app/frontend /app/apache /app/db_conf /app/redis_conf"
-TARGET_DIRS="/app/db_data /app/redis_data"
+TARGET_DIRS="/app/db_data /app/redis_data /app/frontend/.frontend_ver"
 
 echo "1. 檢查並建立所需之資料與設定實體目錄..."
 for dir in $TARGET_DIRS; do
@@ -45,7 +45,7 @@ case "$HOST_OS_TYPE" in
         echo "   👉 執行 Windows NTFS / WSL2 實體目錄權限適配修復..."
         # Windows (NTFS / WSL2 掛載模式):
         # WSL2 / Windows 檔案系統會映射 NTFS 權限。將 db_data 與 redis_data 設為 777 可避開 MariaDB / Redis 容器寫入與權限拒絕的問題
-        chmod -R 777 /app/db_data /app/redis_data 2>/dev/null || true
+        chmod -R 777 /app/db_data /app/redis_data /app/frontend/.frontend_ver 2>/dev/null || true
         echo "   ✓ Windows NTFS 權限修復完成 (chmod 777)"
         ;;
     mac)
@@ -53,7 +53,7 @@ case "$HOST_OS_TYPE" in
         echo "   👉 執行 macOS APFS / Docker Desktop 權限適配修復..."
         # macOS (APFS / VirtioFS / gRPC FUSE):
         # macOS 掛載點由 Docker Desktop 虛擬化核心處理，設定開放權限並維護存取點
-        chmod -R 777 /app/db_data /app/redis_data 2>/dev/null || true
+        chmod -R 777 /app/db_data /app/redis_data /app/frontend/.frontend_ver 2>/dev/null || true
         echo "   ✓ macOS APFS 權限修復完成 (chmod 777)"
         ;;
     linux|*)
@@ -61,7 +61,7 @@ case "$HOST_OS_TYPE" in
         echo "   👉 執行 Linux 原生 UID/GID 與讀寫權限修復..."
         # Native Linux:
         # 確保 MariaDB (UID 999) 與 Redis (UID 999) 或根使用者容器皆具備讀寫實體目錄權限
-        chmod -R 777 /app/db_data /app/redis_data 2>/dev/null || true
+        chmod -R 777 /app/db_data /app/redis_data /app/frontend/.frontend_ver 2>/dev/null || true
         if command -v chown >/dev/null 2>&1; then
             chown -R 999:999 /app/db_data /app/redis_data 2>/dev/null || chmod -R 777 /app/db_data /app/redis_data 2>/dev/null || true
         fi

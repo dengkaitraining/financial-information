@@ -14,6 +14,8 @@
 | **`netcat-openbsd (nc)`** | 網路與健康等待工具 | 對 MariaDB 3306 Port 進行 TCP 健康輪詢，確認資料庫就緒 | `entrypoint.sh` 啟動 Migration 前 |
 | **`./scripts/test_health.sh`** | 自動化測試腳本 | 自動測試根目錄純文字、API JSON 狀態、Vue 200 OK 與 `.env` 變數 | 建置完成後進行整合測試時 |
 | **`python backend_ver/run_all.py`** | 後端手動驗證整合執行器 | 一鍵驗證後端環境變數、Django 自我檢查、MariaDB 雙資料庫連線與 Redis 緩存讀寫 | 進入 `fin_django_backend` 進行後端服務與多資料庫手動測試驗證時 |
+| **`node frontend_ver/run_all.js`** | 前端手動驗證整合執行器 | 一鍵驗證前端 Node 環境變數、API 埠口連線與 Apache 反代理網頁健康度 | 進入 `fin_vue_frontend` 進行前端服務手動測試驗證時 |
+| **`bash enter_dc.sh`** | 快捷容器進入工具 | 提供互動式 CLI 介面，讓開發者輸入容器名稱即可快速開啟 bash/sh 終端 | 在宿主機需要快速進入容器進行調試或手動測試時 |
 
 ---
 

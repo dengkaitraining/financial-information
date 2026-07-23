@@ -45,7 +45,7 @@ sleep 8
 UNIT_TEST_PASSED=false
 for i in $(seq 1 6); do
     echo "  嘗試連線執行單元測試 ($i/6)..."
-    if docker exec django_backend python manage.py test; then
+    if docker exec fin_django_backend python manage.py test; then
         UNIT_TEST_PASSED=true
         break
     fi
@@ -62,7 +62,7 @@ fi
 echo "5. 執行部署後健康驗證 (http://localhost/api/status/)..."
 if command -v curl >/dev/null 2>&1; then
     HEALTH_RES=$(curl -s http://localhost/api/status/ || echo "")
-    if echo "$HEALTH_RES" | grep -q '"status":"online"' && echo "$HEALTH_RES" | grep -q '"status":"connected"'; then
+    if echo "$HEALTH_RES" | grep -q '"status"[[:space:]]*:[[:space:]]*"online"' && echo "$HEALTH_RES" | grep -q '"status"[[:space:]]*:[[:space:]]*"connected"'; then
         echo "======================================================================"
         echo "🎉 Linux 平台部署與單元測試全數成功完成！"
         echo "   🌐 系統儀表板網址: http://localhost/tech-stack/"
