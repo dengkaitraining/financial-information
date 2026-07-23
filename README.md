@@ -22,7 +22,7 @@
 | :--- | :--- | :--- | :--- |
 | **`init-dir` 服務** | Alpine Linux (`init-dir`) | 自動判斷 Host OS (Win/Linux/Mac) 建立目錄與權限修復 | 容器編排最優先啟動 (Completed Successfully 後觸發其他服務) |
 | **Apache HTTPD (`web`)** | Apache HTTPD `2.4-alpine` | 反向代理網頁伺服器，統一 Port 80 進入點 | 處理 `/tech-stack/`, `/`, `/admin/`, `/api/` 路由轉接 |
-| **Django Backend (`backend`)** | Python `3.11` + Django `5.2 LTS` | 後端 Web 框架、Unfold 美觀後台、REST API 與單元測試 | 提供根目錄、Unfold、`/api/status/` 端點與單元測試 |
+| **Django Backend (`backend`)** | Python `3.14` + Django `5.2 LTS` | 後端 Web 框架、Unfold 美觀後台、REST API 與單元測試 | 提供根目錄、Unfold、`/api/status/` 端點與單元測試 |
 | **手動測試環境 (`backend_ver`)** | Python 模組與整合腳本 | 後端程式、模組與連線手動驗證測試環境，包含 GNews 爬蟲測試 | 進入容器以 CLI 執行 `python backend_ver/run_all.py` |
 | **手動測試環境 (`frontend_ver`)** | Node/JS 模組與整合腳本 | 前端 Vue 環境、環境變數與 API 埠口健康度手動驗證環境 | 進入前端容器執行 `node frontend_ver/run_all.js` |
 | **Vue Frontend (`frontend`)** | Vue `3.5` + TS + Tailwind `4.3` | 前端 SPA 開發伺服器 (Vite `base: /tech-stack/`) | 造訪 `http://localhost/tech-stack/` 儀表板 (含 10 分鐘自動檢測) |

@@ -55,6 +55,7 @@ class GoogleNewsScraper:
 
                 new_item = {
                     "index": int(n_time * 1000),
+                    "from": "Google New",
                     "title": str(item.get('title')),
                     "timestamp": int(n_time),
                     "datetime": str(datetime.fromtimestamp(n_time).strftime("%Y-%m-%d %H:%M:%S, %a")),

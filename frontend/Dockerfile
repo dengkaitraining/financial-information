@@ -1,9 +1,9 @@
 # ==============================================================================
 # Vue 3.5 前端開發服務 Dockerfile
-# 說明：基於 Node 20 Alpine 輕量化環境，運行 Vite Dev Server
+# 說明：基於 Node 26 Alpine 輕量化環境，運行 Vite Dev Server
 # ==============================================================================
 
-FROM node:20-alpine
+FROM node:26-alpine
 
 RUN apk add --no-cache bash
 

@@ -7,4 +7,5 @@ if [ -z "$container_name" ]; then
     exit 1
 fi
 
+docker inspect -f '{{.Name}} - {{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$container_name"
 docker exec -it "$container_name" bash 2>/dev/null || docker exec -it "$container_name" sh
