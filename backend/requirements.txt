@@ -41,3 +41,6 @@ pymysql
 
 # python-dotenv
 python-dotenv
+
+# mariadb
+mariadb

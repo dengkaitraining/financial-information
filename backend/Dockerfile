@@ -28,7 +28,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # 升級 pip 與 wheel，確保能正確解析新版 CPython 的編譯標籤
-#RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 
 # 複製並升級 pip 與安裝 Python 相依套件
 COPY requirements.txt /app/

@@ -102,6 +102,7 @@ services:
       MARIADB_USER: ${DB_USER:-user_stock}
       MARIADB_PASSWORD: ${DB_PASSWORD:-user_stock_pass}
       MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-db_root_secure_pass}
+      TZ: ${DB_TZ:-time_zone}
     ports:
       - "${HOST_DB_PORT:-3306}:3306"
     volumes:
