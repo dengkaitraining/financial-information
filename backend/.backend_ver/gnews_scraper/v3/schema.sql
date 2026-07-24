@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS `parameter_settings` (
 
 -- 建立新聞資料表單 (News Data Table)
 CREATE TABLE IF NOT EXISTS `news_data` (
-    `id` INT AUTO_INCREMENT COMMENT '主鍵',
+    `id` BIGINT UNSIGNED AUTO_INCREMENT COMMENT '主鍵',
     `title` TEXT NOT NULL COMMENT '新聞標題',
     `published_date` VARCHAR(100) COMMENT '發布時間',
     `publisher` VARCHAR(100) COMMENT '新聞來源',
@@ -28,7 +28,10 @@ CREATE TABLE IF NOT EXISTS `news_data` (
 -- ALTER TABLE news_data MODIFY url VARCHAR(768) NOT NULL COMMENT '文章連結';
 -- ALTER TABLE news_data ADD UNIQUE INDEX idx_unique_url (url);
 
-GRANT ALL PRIVILEGES ON `tw_stock_analysis`.* TO 'user_employee'@'%';
-GRANT ALL PRIVILEGES ON `tw_stock_analysis`.* TO 'user_stock'@'%';
-
+GRANT ALL PRIVILEGES ON `tw_stock_analysis`.* TO 'user_employee'@'%' WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON `tw_stock_analysis`.* TO 'user_stock'@'%' WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON `user_stock_db`.* TO 'user_employee'@'%' WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON `user_stock_db`.* TO 'user_stock'@'%' WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON `db_employee`.* TO 'user_employee'@'%' WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON `db_employee`.* TO 'user_stock'@'%' WITH GRANT OPTION;
 FLUSH PRIVILEGES;

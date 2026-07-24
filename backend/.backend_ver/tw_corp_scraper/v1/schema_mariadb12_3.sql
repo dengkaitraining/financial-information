@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS `company_profile` (
 
 -- 2. 經營營運面 (Monthly Revenue & Growth)
 CREATE TABLE IF NOT EXISTS `monthly_revenue` (
-    `id` BIGINT AUTO_INCREMENT COMMENT '主鍵',
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主鍵',
     `stock_id` VARCHAR(10) NOT NULL COMMENT '股票代號',
     `revenue_year` INT NOT NULL COMMENT '營收年份',
     `revenue_month` INT NOT NULL COMMENT '營收月份',
@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS `monthly_revenue` (
 
 -- 3. 財務獲利面 (Financial Metrics)
 CREATE TABLE IF NOT EXISTS `financial_metrics` (
-    `id` BIGINT AUTO_INCREMENT COMMENT '主鍵',
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主鍵',
     `stock_id` VARCHAR(10) NOT NULL COMMENT '股票代號',
     `year` INT NOT NULL COMMENT '年份',
     `quarter` INT NOT NULL COMMENT '季度 (1-4)',
@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS `financial_metrics` (
 
 -- 4. 估值與籌碼面 (Valuation & Chip)
 CREATE TABLE IF NOT EXISTS `valuation_chip` (
-    `id` BIGINT AUTO_INCREMENT COMMENT '主鍵',
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主鍵',
     `stock_id` VARCHAR(10) NOT NULL COMMENT '股票代號',
     `trade_date` DATE NOT NULL COMMENT '交易日期',
     `pe_ratio` DECIMAL(8,2) DEFAULT NULL COMMENT '本益比 (P/E)',

@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS `parameter_settings` (
         # 建立新聞資料表
         cursor.execute("""
 CREATE TABLE IF NOT EXISTS `news_data` (
-    `id` INT AUTO_INCREMENT COMMENT '主鍵',
+    `id` BIGINT UNSIGNED AUTO_INCREMENT COMMENT '主鍵',
     `title` TEXT NOT NULL COMMENT '新聞標題',
     `published_date` VARCHAR(100) COMMENT '發布時間',
     `publisher` VARCHAR(100) COMMENT '新聞來源',
