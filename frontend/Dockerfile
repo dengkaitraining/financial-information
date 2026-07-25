@@ -5,7 +5,13 @@
 
 FROM node:26-alpine
 
-RUN apk add --no-cache bash
+# 設定環境變數
+ENV LANG=zh_TW.UTF-8
+ENV LANGUAGE=zh_TW:zh
+#ENV LC_ALL=zh_TW.UTF-8
+ENV TZ=Asia/Taipei
+
+RUN apk add --no-cache bash tzdata musl-locales musl-locales-lang
 
 WORKDIR /app
 

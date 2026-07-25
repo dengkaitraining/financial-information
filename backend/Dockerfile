@@ -12,6 +12,11 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1
 # 強制 Python 標準輸出與標準錯誤直接即時印出 (不快取)
 ENV PYTHONUNBUFFERED=1
+# 設定環境變數
+ENV LANG=zh_TW.UTF-8
+ENV LANGUAGE=zh_TW:zh
+#ENV LC_ALL=zh_TW.UTF-8
+ENV TZ=Asia/Taipei
 
 WORKDIR /app
 
@@ -25,7 +30,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxslt1-dev \
     #zlib1g-dev \
     #python3-dev \
+    #locales \
     && rm -rf /var/lib/apt/lists/*
+
+# 安裝語系套件並生成 zh_TW.UTF-8
+#RUN apt-get update && apt-get install -y locales \
+#    && locale-gen zh_TW.UTF-8 \
+#    && update-locale LANG=zh_TW.UTF-8
 
 # 升級 pip 與 wheel，確保能正確解析新版 CPython 的編譯標籤
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel

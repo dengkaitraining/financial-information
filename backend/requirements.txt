@@ -44,3 +44,12 @@ python-dotenv
 
 # mariadb
 mariadb
+
+# deep-translator
+deep-translator
+
+# mysql-connector-python
+mysql-connector-python
+
+# twstock
+twstock
