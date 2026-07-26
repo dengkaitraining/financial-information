@@ -1,26 +1,23 @@
 # db.py
-# db.py
-import MySQLdb
-import MySQLdb.cursors
+import pymysql
 from typing import Dict, List
 import logging
 
 class DatabaseManager:
     def __init__(self, host='localhost', port=3306, user='root', password='', db='stock_db'):
-        # MySQLdb (mysqlclient) 的設定參數
         self.config = {
             'host': host,
             'port': port,
             'user': user,
-            'passwd': password,  # 注意：mysqlclient 參數名稱為 passwd
+            'password': password,
             'db': db,
             'charset': 'utf8mb4',
             'autocommit': True,
-            'cursorclass': MySQLdb.cursors.DictCursor
+            'cursorclass': pymysql.cursors.DictCursor
         }
 
     def get_connection(self):
-        return MySQLdb.connect(**self.config)
+        return pymysql.connect(**self.config)
 
     def upsert_profile(self, profile: Dict) -> bool:
         """寫入或更新公司基本資料 (ON DUPLICATE KEY UPDATE)"""
@@ -58,14 +55,9 @@ class DatabaseManager:
             group_name = VALUES(group_name),
             main_business = VALUES(main_business);
         """
-        
-        conn = self.get_connection()
-        try:
+        with self.get_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(sql, profile)
-        finally:
-            conn.close() # 確保連線被關閉
-            
         return True
 
     def upsert_calendars(self, calendar_list: List[Dict]) -> int:
@@ -81,15 +73,11 @@ class DatabaseManager:
             description = VALUES(description);
         """
         written_count = 0
-        conn = self.get_connection()
-        try:
+        with self.get_connection() as conn:
             with conn.cursor() as cursor:
                 for item in calendar_list:
                     cursor.execute(sql, item)
                     written_count += 1
-        finally:
-            conn.close()
-            
         return written_count
 
     def upsert_news(self, news_list: List[Dict]) -> int:
@@ -107,10 +95,10 @@ class DatabaseManager:
             summary = VALUES(summary);
         """
         written_count = 0
-        conn = self.get_connection()
-        try:
+        with self.get_connection() as conn:
             with conn.cursor() as cursor:
                 for item in news_list:
+                    # 時間格式處理解析
                     pub_date = item.get('published_date')
                     if pub_date and not isinstance(pub_date, str):
                         item['published_date'] = str(pub_date)
@@ -119,7 +107,4 @@ class DatabaseManager:
                         written_count += 1
                     except Exception as e:
                         logging.warning(f"Failed to insert news item: {item.get('url')} - {e}")
-        finally:
-            conn.close()
-            
         return written_count
