@@ -30,7 +30,7 @@ def main():
     
     # 請在此處調整您的 MariaDB 資料庫連線設定
     db = DatabaseManager(
-        host='172.18.0.4',
+        host='172.18.0.3',
         port=3306,
         user=os.getenv("DB_USER"),
         password=os.getenv("DB_PASSWORD"),
