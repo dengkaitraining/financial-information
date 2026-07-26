@@ -37,19 +37,25 @@ requests
 yfinance
 
 # pymysql
-pymysql
+#pymysql
 
 # python-dotenv
 python-dotenv
 
 # mariadb
-mariadb
+#mariadb
 
 # deep-translator
 deep-translator
 
 # mysql-connector-python
-mysql-connector-python
+#mysql-connector-python
 
 # twstock
 twstock
+
+# numpy
+numpy
+
+# googletrans==4.0.0-rc1
+googletrans==4.0.0-rc1

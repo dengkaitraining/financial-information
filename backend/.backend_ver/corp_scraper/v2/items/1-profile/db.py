@@ -1,5 +1,4 @@
 # db.py
-# db.py
 import MySQLdb
 import MySQLdb.cursors
 from typing import Dict, List
