@@ -1,105 +1,149 @@
-# Django 5.2 + Vue.js 3.5 多資料庫與 Unfold 後台實作計畫 (Implementation Plan)
+# 台股公司基本資料 profile 搜尋、儲存、排程與戰情室系統實作計畫
 
-本實作計畫詳細記載基於 Docker Compose 建立之 **Python Django 5.2 (整合 Django Unfold 美觀後台與多資料庫管理)**、**MariaDB 12.3 多連線帳號與權限架構**、**Vue.js 3.5 (整合 TypeScript 與 Tailwind CSS 4.3)**、**Apache HTTPD 反向代理** 與 **Redis 8.8** 完整 Stack 之架構、服務設計、Host OS 自動判斷、實體目錄掛載適配、單元測試套件與跨平台自動化部署作業。
-
----
-
-## 1. 系統服務組件與多資料庫對照表
-
-| 服務名稱 | 技術堆疊與版本 | 自定義設定檔 / 資料庫 | 職責說明與權限範疇 |
-| :--- | :--- | :--- | :--- |
-| **`init-dir`** | Alpine Linux (`latest`) | `scripts/init_dir.sh` | 自動判斷 Host OS (Win/Linux/Mac) 建立實體目錄與權限修復 |
-| **`web`** | Apache HTTPD `2.4-alpine` | `httpd-custom.conf` | 反向代理網頁伺服器，統一 Port 80 進入點與路由分發 |
-| **`db`** | MariaDB `12.3` | `my_custom.cnf`, `init_multi_db.sql` | 包含 `user_stock_db` 與 `db_employee`，實體目錄 `./db_data` 持久化 |
-| **`redis`** | Redis `8.8` | `redis.conf` | 提供 Django 快取與 Session 記憶體資料庫，實體目錄 `./redis_data` 持久化 |
-| **`backend`** | Python `3.11` + Django `5.2 LTS` | `settings.py`, `db_router.py`, `entrypoint.sh` | 搭載 Unfold 美觀後台、`employees` 模組、Host OS 自動判斷與全套單元測試 |
-| **`frontend`** | Node `20` + Vue `3.5` + Tailwind `4.3` | `vite.config.ts` | 系統儀表板 (Vite `base: /tech-stack/`)，含 10 分鐘自動檢測 |
+本計畫旨在依據 `<spec>` 需求，在既有的 Docker Compose 容器化 Django + Vue.js 開發環境中，建立搜尋、儲存、排程「公司基本資料 profile 資料」的模組。本實作將使用 Django 5.2 LTS, Django Unfold 後台, Celery, Django Celery Beat 與 Vue 3.5。
 
 ---
 
-## 2. MariaDB 12.3 多帳號與多資料庫 (.env) 協作架構
+## 系統架構設計
 
-在 [.env](../../../../.env) 中配置有雙帳號與雙資料庫連線參數，滿足企業多資料庫隔離與跨庫存取需求：
+我們將採用 Django ORM 來管理「公司基本資料」、「公司行事曆」、「公司新聞與個股公告」以及「排程更新清單」等表單。此舉將完全相容於 Django Unfold 的後台管理介面，並能夠透過 `django-celery-beat` 元件在後台以圖形化介面配置 Crontab 排程任務。
 
-1. **`user_stock_db` (主要資料庫)**：
-   - 連線帳號：`user_stock` (`DB_USER`) / 密碼：`user_stock_pass`
-   - 權限範疇：具備 `user_stock_db.*` 完整讀寫權限，並經授權可同時讀寫 `db_employee.*` 及全域測試權限。
-2. **`db_employee` (員工主資料庫)**：
-   - 連線帳號：`user_employee` (`EMPLOYEE_DB_USER`) / 密碼：`user_employee_pass`
-   - 權限範疇：具備 `db_employee.*` 專屬讀寫權限。
-3. **實體目錄掛載 (`./db_data`)**：
-   - `docker-compose.yaml` 中 `django_db` volumes 指向 `./db_data:/var/lib/mysql`。配合 `my_custom.cnf` 設定 `innodb_file_per_table = 0` 與 `innodb_use_native_aio = 0` 防止 Windows NTFS / macOS APFS 實體目錄 Tablespace `errno 194` 重命名錯誤。
-4. **Host OS 自動判斷 (`entrypoint.sh`)**：
-   - 容器啟動時會透過核心特徵判斷宿主機作業系統 (`windows`, `linux`, `mac`)，自動套用適配的 ORM Schema 遷移與備援機制。
+### 1. 資料庫模型與 Migration 機制
+所有資料表預設建立於 `default` 資料庫中（即 `user_stock_db`，由 `PrimaryEmployeeRouter` 自動路由）。
+我們將**完全使用 Django Models** 定義這四個資料表。如此一來，即可透過 Django 內建的 `python manage.py makemigrations` 與 `python manage.py migrate` 機制管理表單的建立與版控，完美整合 Django migration 機制：
+* **`CompanyProfile`** (公司基本資料表):
+  * `stock_id` (股票代碼, 主鍵)
+  * `company_name` (公司名稱)、`tax_id` (統一編號)、`spokesperson` (發言人)、`eng_short_name` (英文簡稱)、`deputy_spokesperson` (代理發言人)、`establishment_date` (成立時間)、`phone` (總機電話)、`listing_date` (掛牌日期)、`fax` (傳真號碼)、`industry_category` (產業類別)、`website` (公司網站)、`chairman` (董事長)、`email` (電子郵件)、`general_manager` (總經理)、`stock_transfer_agent` (股務代理)、`capital` (股本)、`auditor` (簽證會計師)、`issued_shares` (已發行普通股數)、`address` (地址)、`market_cap_millions` (市值百萬)、`market_type` (市場別)、`insider_holding_ratio` (董監持股比例)、`group_name` (所屬集團)、`main_business` (主要經營業務)
+* **`CompanyCalendar`** (公司行事曆資料表):
+  * 外鍵關聯至 `CompanyProfile` (`stock_id`)
+  * `event_type` (事件類型: 股東常會 / 配股發放日 / 現金股利發放日)
+  * `event_date` (事件日期)
+  * `description` (補充說明)
+  * 聯合唯一約束：`(stock_id, event_type, event_date)`
+* **`CompanyNews`** (公司新聞與個股公告資料表):
+  * 外鍵關聯至 `CompanyProfile` (`stock_id`)
+  * `news_type` (類型: NEWS / ANNOUNCEMENT)
+  * `title` (標題)
+  * `url` (連結 URL, CharField 限制 max_length=500，防範 TEXT 在 Unique 索引中報錯)
+  * `publisher` (來源)、`published_date` (發布時間)、`summary` (摘要)
+  * 聯合唯一約束：`(stock_id, url)`
+* **`StockScheduleList`** (排程更新清單):
+  * `stock_id` (股票代碼, 主鍵)
 
----
+### 2. 定時排程機制 (Celery + Celery Beat)
+* 在 `docker-compose.yaml` 中新增 `fin-celery-worker` 與 `fin-celery-beat` 服務，共享 `fin-backend` 容器的環境與代碼。
+* 在 `core/tasks.py` 建立：
+  * `core.tasks.update_single_stock(stock_id)`: 負責執行指定股票代碼的爬蟲抓取、英翻中及資料庫 upsert (ORM)。
+  * `core.tasks.update_all_scheduled_stocks()`: 遍歷 `StockScheduleList` 中的股票，呼叫並更新各檔股票。
+* 在 Django Unfold 中重新註冊 `django-celery-beat` 的管理介面，讓管理員可以直接設定 Crontab 定時任務。
 
-## 3. 跨平台自動檢測部署與單元測試作業架構 (Multi-OS Deployment & Testing)
+### 3. 前端戰情室 Dashboard (Vue 3.5)
+* 於 `frontend/src/App.vue` 中整合「公司基本資料戰情室」介面，採用 **極致深色科技感 (Glassmorphism & Neon Glow)** 的現代 UI。
+* 包含股票搜尋輸入框，支援：
+  * **「搜尋」按鈕**：自 Django API 讀取本機資料。
+  * **「即時更新並儲存」按鈕**：發送請求至後端觸發即時爬蟲與資料落庫，並將該股票自動加入排程清單。
+* 顯示公司基本資料 (以精緻的 Grid 呈現 25 項欄位)、行事曆 (近10筆) 與新聞公告 (近10筆)。
+* 行事曆與新聞各自附帶 **"More"** 按鈕，點擊後會透過 `window.open` 開啟後端渲染的新分頁，列出全部資訊。
 
-專案提供支援 **Windows**、**Linux** 與 **macOS** 三大作業系統的自動化單元測試與部署腳本：
-
-1. **統一跨平台進入點 (Linux, macOS, Git Bash, WSL)**:
-   - `./scripts/deploy.sh`：自動偵測 Host OS 並轉接專屬部署與單元測試。
-2. **Linux 平台專用 (Ubuntu / Debian / RHEL)**:
-   - `./scripts/deploy_linux.sh`：Linux 原生 Docker Engine 高效能部署模式與自動權限校驗。
-3. **macOS 平台專用 (Apple Silicon / Intel)**:
-   - `./scripts/deploy_mac.sh`：macOS (Apple Silicon M 系列 / Intel x86_64) 與 APFS 檔案系統掛載適配。
-4. **Windows 平台專用 (PowerShell)**:
-   - `powershell -ExecutionPolicy Bypass -File ./scripts/deploy_windows.ps1`：Windows 10/11 PowerShell 5.1+ 與 Docker Desktop (WSL2 / NTFS 掛載適配)。
-5. **Django 單元測試套件 (`core/tests.py` & `employees/tests.py`)**:
-   - 包含 API 端點狀態、`PrimaryEmployeeRouter` 多庫路由、Redis 快取 Set/Get、`Employee` Model CRUD 與 `seed_employees` 管理指令測試（9 項測試全數通過）。
-
-## 4. 後端手動測試與驗證環境架構 (backend_ver)
-
-專案在後端容器 `fin_django_backend` 內提供了手動測試驗證模組 `backend_ver`，其實體檔案存放在隱藏資料夾 `.backend_ver` 中，並透過軟連結進行公開/隱蔽控制：
-1. **進入點**：透過 `docker exec -it fin_django_backend bash` / `sh` 進入容器執行（亦可透過 `enter_dc.sh`）。
-2. **驗證指令**：執行 `python backend_ver/run_all.py` 進行一鍵整合測試（軟連結啟用時）。
-3. **測試模組**：
-   - `test_django_env.py`：驗證系統環境與 System Check。
-   - `test_db_conn.py`：驗證多資料庫路由與連線帳密讀寫權限。
-   - `test_redis_conn.py`：驗證 Redis Cache API 的 Set/Get/Delete。
-   - `gnews_scraper/`：手動新聞爬取測試模組 (包含 gnews 與 pandas 套件之安裝驗證)。
-4. **控制參數 (`SHOW_BACKEND_VER`) 目錄控制**：
-   - **測試開發環境 (`SHOW_BACKEND_VER=True`)**：容器啟動時自動建立軟連結 `backend_ver -> .backend_ver`，使測試資料夾與內容正常顯現並可供執行。
-   - **正式上線環境 (`SHOW_BACKEND_VER=False`)**：容器啟動時自動刪除軟連結 `backend_ver`，徹底隱蔽測試資料夾與內容，防範敏感程式洩漏。
+### 4. 後端 More 資訊頁面 (Django Template + Tailwind)
+* 新增 `/stock/calendar/<stock_id>/` 與 `/stock/news/<stock_id>/` 路由與 View，回傳精美渲染的 Full List 頁面，搭配 Tailwind CSS 與現代深色戰情室風格，與前台完美呼應。
 
 ---
 
-## 5. 前端手動測試與驗證環境架構 (frontend_ver)
+## Proposed Changes
 
-專案在前端容器 `fin_vue_frontend` 內提供了手動測試驗證模組 `frontend_ver`，其實體檔案存放在隱藏資料夾 `.frontend_ver` 中，並透過軟連結進行公開/隱蔽控制：
-1. **進入點**：透過 `docker exec -it fin_vue_frontend sh` 進入容器執行（亦可透過 `enter_dc.sh`）。
-2. **驗證指令**：執行 `node frontend_ver/run_all.js` 或是 `sh frontend_ver/run_all.sh` 進行一鍵整合測試。
-3. **測試模組**：
-   - `test_env.js`：驗證前端 Node 環境與環境變數。
-   - `test_api.js`：驗證後端 API 連線與健康回應狀態。
-   - `test_web.js`：驗證 Apache HTTPD 反向代理與網頁健康。
-4. **控制參數 (`SHOW_FRONTEND_VER`) 目錄控制**：
-   - **測試開發環境 (`SHOW_FRONTEND_VER=True`)**：容器啟動時自動建立軟連結 `frontend_ver -> .frontend_ver`，使測試資料夾與內容正常顯現並可供執行。
-   - **正式上線環境 (`SHOW_FRONTEND_VER=False`)**：容器啟動時自動刪除軟連結 `frontend_ver`，徹底隱蔽前端測試資料夾與內容，防範敏感腳本外洩。
+### 🔧 基礎相依性與環境配置
 
----
+#### [MODIFY] [requirements.txt](file:///home/dengkai/projects/financial-information/backend/requirements.txt)
+* 新增 `celery` 與 `django-celery-beat` 函式庫。
 
-## 6. 互動式快捷進入工具 (enter_dc.sh)
+#### [MODIFY] [docker-compose.yaml](file:///home/dengkai/projects/financial-information/docker-compose.yaml)
+* 於 `services` 中新增 `fin-celery-worker` 與 `fin-celery-beat` 容器。
 
-在專案根目錄下建立了 `enter_dc.sh` 互動式 CLI 腳本，簡化開發者進入 Docker 容器的步驟：
-- 執行 `bash enter_dc.sh`。
-- 輸入目標容器名稱後，腳本會自動選取適合的終端核心（`bash` 優先，失敗則回退使用 `sh`）進入。
+#### [MODIFY] [settings.py](file:///home/dengkai/projects/financial-information/backend/core/settings.py)
+* `INSTALLED_APPS` 內註冊 `django_celery_beat`。
+* 配置 `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`, `CELERY_BEAT_SCHEDULER` 參數。
 
----
+#### [NEW] [celery.py](file:///home/dengkai/projects/financial-information/backend/core/celery.py)
+* 初始化 Celery 應用，載入 Django 設定，並開啟自動探測。
 
-## 7. URL 路由對照表
-
-| 造訪網址 (URL) | 轉接目標服務 | 預期回應與功能說明 | 權限要求 |
-| :--- | :--- | :--- | :--- |
-| **`http://localhost/`** | Django Backend (`/`) | 純文字：`Django + Vue.js Web 資訊系統開發環境的服務已啟用。` | 無需權限 |
-| **`http://localhost/tech-stack/`** | Vue 3.5 Frontend (`/tech-stack/`) | Vue 3.5 資訊系統儀表板 (含 10 分鐘自動檢測) | 無需權限 |
-| **`http://localhost/admin/`** | Django Backend (`/admin/`) | Django Unfold 管理員後台 (包含 `employees` 員工表) | Staff / Admin 權限 |
-| **`http://localhost/api/status/`** | Django Backend (`/api/status/`) | 健康檢測 JSON 數據 (MariaDB & Redis 檢測) | 無需權限 |
+#### [MODIFY] [__init__.py](file:///home/dengkai/projects/financial-information/backend/core/__init__.py)
+* 於套件初始化時載入 `celery_app`，使其隨 Django 啟動。
 
 ---
 
-## 相關文件連結
-- 主要技能規範：[SKILL.md](../SKILL.md)
-- 任務清單紀錄：[02_task_list.md](./02_task_list.md)
-- 逐步解說紀錄：[03_walkthrough.md](./03_walkthrough.md)
+### 📦 資料庫與爬蟲整合
+
+#### [MODIFY] [models.py](file:///home/dengkai/projects/financial-information/backend/core/models.py)
+* 定義 `CompanyProfile`, `CompanyCalendar`, `CompanyNews`, `StockScheduleList`。
+
+#### [NEW] [db_django.py](file:///home/dengkai/projects/financial-information/backend/core/scraper/db_django.py)
+* 實作使用 Django ORM (update_or_create) 的 upsert 機制，取代 `MySQLdb` 寫入。
+
+#### [NEW] [fetcher.py](file:///home/dengkai/projects/financial-information/backend/core/scraper/fetcher.py)
+* 移植原 `.backend_ver/corp_scraper/v2/items/1-profile/fetcher.py` 內容。
+
+#### [NEW] [translator.py](file:///home/dengkai/projects/financial-information/backend/core/scraper/translator.py)
+* 移植原 `.backend_ver/corp_scraper/v2/items/1-profile/translator.py` 內容。
+
+#### [NEW] [tasks.py](file:///home/dengkai/projects/financial-information/backend/core/tasks.py)
+* 建立 Celery 任務 `update_single_stock` 與 `update_all_scheduled_stocks`。
+
+#### [NEW] [admin.py](file:///home/dengkai/projects/financial-information/backend/core/admin.py)
+* 註冊自定義 Models 到 Unfold Admin；並用 Unfold 樣式重新接管 `PeriodicTask` 與 `CrontabSchedule`。
+
+---
+
+### 🌐 路由、API 與前端展示
+
+#### [MODIFY] [views.py](file:///home/dengkai/projects/financial-information/backend/core/views.py)
+* 實作 `/api/stock/fetch/` JSON API，處理搜尋與即時更新邏輯。
+* 實作 `/stock/calendar/<stock_id>/` 與 `/stock/news/<stock_id>/` 視圖，查詢並渲染所有行事曆與新聞。
+
+#### [MODIFY] [urls.py](file:///home/dengkai/projects/financial-information/backend/core/urls.py)
+* 註冊 API 路由與 HTML 詳情分頁路由。
+
+#### [NEW] [stock_calendar.html](file:///home/dengkai/projects/financial-information/backend/templates/stock_calendar.html)
+* 渲染該股票全部行事曆的精美 HTML 範本。
+
+#### [NEW] [stock_news.html](file:///home/dengkai/projects/financial-information/backend/templates/stock_news.html)
+* 渲染該股票全部新聞公告的精美 HTML 範本。
+
+#### [MODIFY] [App.vue](file:///home/dengkai/projects/financial-information/frontend/src/App.vue)
+* 整合「公司基本資料戰情室」UI。
+* 串接後端 API，支援股票搜尋、即時更新。
+* 實作 "More" 按鈕跳轉至對應詳細頁面。
+
+---
+
+## Verification Plan
+
+### Automated Tests
+* 在 `backend/core/tests.py` 新增單元測試：
+  * 測試 `CompanyProfile`, `CompanyCalendar`, `CompanyNews`, `StockScheduleList` 的 ORM 功能與欄位約束。
+  * 測試 `/api/stock/fetch/` 的正常查詢與即時更新 API。
+  * 測試行事曆與新聞詳情頁面渲染。
+* 執行測試指令：
+  ```bash
+  docker compose exec fin-backend python manage.py test core
+  ```
+
+### Manual Verification
+1. 建立 Migrations 並執行遷移：
+   ```bash
+   docker compose exec fin-backend python manage.py makemigrations core
+   docker compose exec fin-backend python manage.py migrate
+   ```
+2. 重建並啟動容器：
+   ```bash
+   docker compose down
+   docker compose up -d --build
+   ```
+3. 進入 Django Unfold 後台 (`http://localhost/admin/`)：
+   - 驗證「公司基本資料」、「公司行事曆」、「公司新聞」、「排程更新清單」等表單的管理功能（新增、修改、刪除）。
+   - 驗證 `Periodic tasks` 和 `Crontabs` 可以圖形化操作，新增定時任務。
+4. 前台網頁測試 (`http://localhost/tech-stack/`)：
+   - 進行股票代碼搜尋（如輸入 `2330` 並搜尋）。
+   - 點擊「即時更新並儲存」：驗證資料成功透過 yfinance & GNews 抓取、自動英翻中、儲存至 MariaDB，並順利在戰情室 Dashboard 顯示。
+   - 驗證搜尋過的代碼已被寫入「排程更新清單」表中。
+   - 點擊「行事曆」和「新聞」區的 `More` 按鈕，驗證會成功開啟新分頁，展示該股票的所有行事曆/新聞公告資料，且頁面風格美觀。

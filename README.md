@@ -7,27 +7,30 @@
 ![MariaDB](https://img.shields.io/badge/MariaDB-12.3-003545?logo=mariadb)
 ![Redis](https://img.shields.io/badge/Redis-8.8-DC382D?logo=redis)
 ![Apache](https://img.shields.io/badge/Apache_HTTPD-2.4-D22128?logo=apache)
+![Celery](https://img.shields.io/badge/Celery-5.6-37814A?logo=celery)
 
-本專案提供一套完整且現代化的 **Python Django + Vue.js Web 資訊系統容器化開發環境**。基於 Docker Compose 技術，整合 Apache HTTPD 反向代理、MariaDB 12.3 多關聯式資料庫 (支援多帳號權限隔離與 host 實體目錄掛載 `./db_data`)、Redis 8.8 高併發快取 (掛載 `./redis_data`)、Django 5.2 LTS (搭載 Django Unfold 美觀後台與單元測試套件) 與 Vue 3.5 (搭載 TypeScript 與 Tailwind CSS v4.3 效能引擎)。
+本專案提供一套完整且現代化的 **Python Django + Vue.js Web 資訊系統容器化開發環境**。基於 Docker Compose 技術，整合 Apache HTTPD 反向代理、MariaDB 12.3 多關聯式資料庫、Redis 8.8 高併發快取與 Celery/Celery Beat 背景排程引擎、Django 5.2 LTS (搭載 Django Unfold 美觀後台與單元測試套件) 與 Vue 3.5 (搭載 TypeScript 與 Tailwind CSS v4.3 效能引擎)。
 
 ---
 
 ## 1. 專案簡介 (Description)
 
-本開發環境具備高擴充性、多資料庫隔離、獨立組態與跨平台 (Windows / Linux / macOS) 相容特性，專為中大型 Web 資訊系統開發設計。包含多帳號連線切換、Host OS 自動判斷、全套單元測試與跨平台一鍵自動化部署機制。
+本開發環境具備高擴充性、多資料庫隔離、獨立組態與跨平台 (Windows / Linux / macOS) 相容特性。最新版本中已整合**台股公司基本資料搜尋、儲存與定時排程更新功能**。藉由非同步 Celery 背景任務與前端動態 3 秒輪詢機制，徹底解決了高耗時爬蟲（如 GNews & yfinance RSS）下的 HTTP 連線逾時（502 Proxy Error）痛點。
 
 ### 📊 技術堆疊、工具功能與使用時機對照表
 
 | 組件 / 工具名稱 | 技術堆疊與版本 | 主要功能與服務角色 | 使用時機與存取點 |
 | :--- | :--- | :--- | :--- |
 | **`init-dir` 服務** | Alpine Linux (`init-dir`) | 自動判斷 Host OS (Win/Linux/Mac) 建立目錄與權限修復 | 容器編排最優先啟動 (Completed Successfully 後觸發其他服務) |
-| **Apache HTTPD (`web`)** | Apache HTTPD `2.4-alpine` | 反向代理網頁伺服器，統一 Port 80 進入點 | 處理 `/tech-stack/`, `/`, `/admin/`, `/api/` 路由轉接 |
-| **Django Backend (`backend`)** | Python `3.14` + Django `5.2 LTS` | 後端 Web 框架、Unfold 美觀後台、REST API 與單元測試 | 提供根目錄、Unfold、`/api/status/` 端點與單元測試 |
+| **Apache HTTPD (`web`)** | Apache HTTPD `2.4-alpine` | 反向代理網頁伺服器，統一 Port 80 進入點，分流 `/profile/` 與 `/tech-stack/` | 處理 `/tech-stack/`, `/profile/`, `/`, `/admin/`, `/api/` 路由轉接 |
+| **Django Backend (`backend`)** | Python `3.12` + Django `5.2 LTS` | 後端 Web 框架、Unfold 美觀後台、REST API 與單元測試 | 提供根目錄、Unfold、`/api/status/`、`/api/stock/fetch/` 等端點 |
+| **Celery Worker (`celery-worker`)**| Celery `5.6.3` | 背景非同步任務執行器。負責 yfinance / GNews 爬取與英翻中落庫任務。 | 由 Django API 觸發非同步任務派發，於背景異步執行。 |
+| **Celery Beat (`celery-beat`)** | django-celery-beat `2.6.0` | 定期排程調度器。基於後台配置定期觸發排程更新任務。 | Unfold 後台圖形化管理，定時驅動 `update_all_scheduled_stocks`。 |
 | **手動測試環境 (`backend_ver`)** | Python 模組與整合腳本 | 後端程式、模組與連線手動驗證測試環境，包含 GNews 爬蟲測試 | 進入容器以 CLI 執行 `python backend_ver/run_all.py` |
 | **手動測試環境 (`frontend_ver`)** | Node/JS 模組與整合腳本 | 前端 Vue 環境、環境變數與 API 埠口健康度手動驗證環境 | 進入前端容器執行 `node frontend_ver/run_all.js` |
-| **Vue Frontend (`frontend`)** | Vue `3.5` + TS + Tailwind `4.3` | 前端 SPA 開發伺服器 (Vite `base: /tech-stack/`) | 造訪 `http://localhost/tech-stack/` 儀表板 (含 10 分鐘自動檢測) |
+| **Vue Frontend (`frontend`)** | Vue `3.5` + TS + Tailwind `4.3` | 前端 SPA 開發伺服器 (Vite `base: /tech-stack/`) | 造訪 `http://localhost/tech-stack/` 監控或 `http://localhost/profile/` 戰情室 |
 | **MariaDB (`db`)** | MariaDB `12.3` | 多關聯式 SQL 資料庫 (`user_stock_db`, `db_employee`) | 提供 `user_stock` 與 `user_employee` 雙帳號存取，掛載 `./db_data` |
-| **Redis (`redis`)** | Redis `8.8` | 快取與 Session 記憶體資料庫 (持久化至 `./redis_data`) | 處理 Django 高併發 Session 與快取資料存取 |
+| **Redis (`redis`)** | Redis `8.8` | 快取與 Session 記憶體資料庫 (同時作為 Celery Broker 與 Backend) | 處理 Django 高併發 Session、快取資料存取與 Celery 任務傳遞 |
 | **目錄與權限修復腳本** | Shell (`./scripts/init_dir.sh`) | 自動判斷 Windows (NTFS)、macOS (APFS) 或 Linux 原生權限修復 | `init-dir` 容器啟動時自動執行 |
 | **快速容器進入工具 (`enter_dc.sh`)** | Shell 互動式指令腳本 | 提供互動式 CLI 輸入以快速進入指定的 Docker 容器 | 於宿主機執行 `bash enter_dc.sh` |
 | **跨平台統一部署進入點** | Shell (`./scripts/deploy.sh`) | 跨平台自動偵測 Host OS 並轉接專屬部署與單元測試 | 執行 `./scripts/deploy.sh` (Linux, macOS, Git Bash, WSL) |
@@ -43,14 +46,15 @@
 1. **多帳號與多資料庫 (.env)**：
    - `user_stock` (`user_stock_pass`)：主要資料庫 `user_stock_db` 之擁有者，經授權同時具備 `db_employee` 讀寫權限與全域測試權限。
    - `user_employee` (`user_employee_pass`)：專屬 `db_employee` 之連線帳號。
-2. **員工主資料表 (employees)**：
-   - 包含工號 (`employee_num`)、姓名、身分證號 (`national_id`)、性別 (`gender`)、主管 (`manager_id`)、狀態 (`status`) 與到職日 (`hire_date`)，容器啟動時自動寫入 10 筆測試資料。
+2. **員工主資料表 (employees) 與台股資料表 (core)**：
+   - 員工資料包含工號、姓名、身分證號、性別、主管、狀態與到職日，容器啟動時自動寫入 10 筆測試資料。
+   - 台股資料包含 `CompanyProfile`（25欄位基本資料）、`CompanyCalendar`（重大行事曆）、`CompanyNews`（相關新聞公告）與 `StockScheduleList`（排程更新清單）。
 3. **自動初始化目錄與權限修復服務 (`init-dir`)**：
-   - Docker Compose 第一優先啟動 `init-dir` 服務 (`scripts/init_dir.sh`)，依據 Host OS 判斷 (Windows NTFS chmod 777 / macOS APFS / Linux chown 999:999 & chmod 777) 自動建立並修復 `./db_data` 與 `./redis_data` 實體目錄權限。
+   - Docker Compose 第一優先啟動 `init-dir` 服務 (`scripts/init_dir.sh`)，依據 Host OS 判斷自動建立並修復 `./db_data` 與 `./redis_data` 實體目錄權限。
 4. **宿主機實體目錄掛載 (`./db_data`)**：
-   - `docker-compose.yaml` 內 `django_db` 服務資料儲存目錄嚴格指向專案內實體路徑 `./db_data:/var/lib/mysql`。配置 `innodb_file_per_table = 0` 與 `innodb_use_native_aio = 0` 確保 Windows NTFS / macOS APFS 相容性。
+   - `docker-compose.yaml` 內 `django_db` 服務資料儲存目錄嚴格指向專案內實體路徑 `./db_data:/var/lib/mysql`。
 5. **宿主機 OS 自動判斷 (`entrypoint.sh`)**：
-   - 容器啟動時會自動判斷 Windows (WSL2)、macOS (LinuxKit) 或 Native Linux 宿主機環境，並調整 ORM Schema 遷移與檔案適配模式。
+   - 容器啟動時會自動判斷 Windows (WSL2)、macOS (LinuxKit) 或 Native Linux 宿主機環境，並調整 ORM Schema 遷移與檔案適配模式。支援自定義 command 傳入以配合 Celery 容器執行背景服務。
 
 ---
 
@@ -67,11 +71,16 @@ graph TD
         InitDir -->|Win / Linux / Mac 自動修復完成 Exit 0| VueFE
 
         Apache -->|Proxy /tech-stack| VueFE["前端服務: Vue 3.5 + Vite + TS + Tailwind v4.3<br/>(vue_frontend Container :5173)"]
+        Apache -->|Proxy /profile| VueFE
         Apache -->|Proxy / admin /api| DjangoBE["後端服務: Django 5.2 LTS + Unfold<br/>(django_backend Container :8000)"]
         
         DjangoBE -->|DB User: user_stock| DBStock[("資料庫: user_stock_db<br/>(django_db Container :3306)")]
         DjangoBE -->|DB User: user_employee| DBEmp[("資料庫: db_employee (employees 表)<br/>(django_db Container :3306)")]
-        DjangoBE -->|Cache Backend: django-redis| Redis[("快取/Session: Redis 8.8<br/>(django_redis Container :6379)")]
+        DjangoBE -->|Cache Backend & Broker: django-redis| Redis[("快取/Session/Celery: Redis 8.8<br/>(django_redis Container :6379)")]
+
+        CeleryBE["定期任務: Celery Beat<br/>(celery_beat Container)"] -->|Broker| Redis
+        CeleryWK["背景非同步: Celery Worker<br/>(celery_worker Container)"] -->|Broker| Redis
+        CeleryWK -->|ORM| DBStock
     end
 
     subgraph HostVolume["💾 宿主機實體目錄 (Host Storage)"]
@@ -91,10 +100,13 @@ flowchart TD
     RootRoute --> ResRoot["回傳純文字：<br/>'Django + Vue.js Web 資訊系統開發環境的服務已啟用。'"]
 
     CheckURL -->|http://localhost/tech-stack/| VueRoute["轉接至 Vue Frontend (/tech-stack/)"]
-    VueRoute --> VueApp["載入 Vue 3.5 資訊系統儀表板 (含 10 分鐘自動檢測)"]
+    VueRoute --> VueApp["載入 Vue 3.5 系統健康檢測頁面<br/>(啟用首次載入自動檢測與 10 分鐘定時自動重新檢查)"]
+
+    CheckURL -->|http://localhost/profile/| VueProfileRoute["轉接至 Vue Frontend (/profile/)"]
+    VueProfileRoute --> VueProfile["載入 Vue 3.5 台股公司資料戰情室<br/>(完全靜態呈現，僅在點擊時手動異步更新)"]
 
     CheckURL -->|http://localhost/admin/| AdminRoute["轉接至 Django Backend (/admin/)"]
-    AdminRoute --> UnfoldUI["載入 Django Unfold 後台 (含 employees 員工表)"]
+    AdminRoute --> UnfoldUI["載入 Django Unfold 後台 (含 employees 員工表與 Celery 排程表)"]
 
     CheckURL -->|http://localhost/api/status/| APIRoute["轉接至 Django Backend (/api/status/)"]
     APIRoute --> ResJSON["對 MariaDB 與 Redis 執行連線測試並回傳 JSON"]
@@ -162,99 +174,12 @@ SHOW_BACKEND_VER=True
 # 1. 統一跨平台進入點 (Linux, macOS, Git Bash, WSL)
 ./scripts/deploy.sh
 
-# 2. Linux 平台專用 (Ubuntu / Debian / RHEL)
-./scripts/deploy_linux.sh
+# 2. 執行 Django 5.2 後端與台股資料單元測試 (10 項測試)
+docker compose exec fin-backend python manage.py test core
 
-# 3. macOS 平台專用 (Apple Silicon / Intel)
-./scripts/deploy_mac.sh
-
-# 4. Windows 平台專用 (PowerShell)
-powershell -ExecutionPolicy Bypass -File ./scripts/deploy_windows.ps1
-
-# 5. 執行 Django 5.2 後端與多資料庫單元測試 (9 項測試)
-docker exec django_backend python manage.py test
-
-# 6. 執行線上服務健康檢測
+# 3. 執行線上服務健康檢測
 ./scripts/test_health.sh
-
 ```
-
-### 🛠️ 後端手動測試與驗證環境 (Manual Verification Environment)
-
-本專案在後端容器 `fin_django_backend` 內提供了 `backend_ver` 手動測試驗證模組。開發者可透過 CLI 進入容器手動執行驗證：
-
-1. **以 CLI (bash 或是 sh) 方式進入執行程式：**
-   ```bash
-   docker exec -it fin_django_backend bash
-   # 或是使用 sh 進入
-   docker exec -it fin_django_backend sh
-   ```
-2. **一鍵執行所有手動測試驗證 (環境、MariaDB、Redis)：**
-   ```bash
-   python backend_ver/run_all.py
-   ```
-3. **單獨執行特定測試腳本：**
-    * 驗證 Django 設定與系統自我檢查：`python backend_ver/test_django_env.py`
-    * 驗證 MariaDB 多資料庫與 ORM 自動路由：`python backend_ver/test_db_conn.py`
-    * 驗證 Redis 快取存取讀寫：`python backend_ver/test_redis_conn.py`
-    * 驗證 Google News 爬蟲功能 (GNews + Pandas)：可以使用隱藏資料夾下 `.backend_ver/gnews_scraper/` 內 v1/v2 版本的 Scraper 進行手動新聞爬取測試。
-
-4. **環境控制參數 (`SHOW_BACKEND_VER`) 目錄隱蔽：**
-   - 藉由 `.env` 中之 `SHOW_BACKEND_VER` 參數進行安全控制。
-   - **測試開發環境 (`SHOW_BACKEND_VER=True`)**：容器啟動時自動建立軟連結 `backend_ver -> .backend_ver`，使測試資料夾與內容正常顯現並可供執行。
-   - **正式上線環境 (`SHOW_BACKEND_VER=False`)**：容器啟動時自動刪除軟連結 `backend_ver`，徹底隱蔽測試資料夾與內容，防範敏感程式洩漏。
-
----
-
-### 🛠️ 前端手動測試與驗證環境 (Frontend Manual Verification Environment)
-
-本專案在前端容器 `fin_vue_frontend` 內提供了 `frontend_ver` 手動測試驗證模組，實體檔案存放在隱藏資料夾 `.frontend_ver` 中，並透過軟連結進行公開/隱蔽控制：
-
-1. **以 CLI (bash 或是 sh) 方式進入執行程式：**
-   ```bash
-   docker exec -it fin_vue_frontend sh
-   ```
-2. **一鍵執行所有前端手動測試驗證 (環境變數、API、Apache 代理)：**
-   ```bash
-   # 執行 node 整合執行器
-   node frontend_ver/run_all.js
-   
-   # 或執行 shell 一鍵整合測試
-   sh frontend_ver/run_all.sh
-   ```
-3. **單獨執行特定測試腳本：**
-   * 驗證前端 Node 環境與環境變數：`node frontend_ver/test_env.js`
-   * 驗證後端 API 連線與健康回應：`node frontend_ver/test_api.js`
-   * 驗證 Apache 反向代理與 Vue 本地網頁健康：`node frontend_ver/test_web.js`
-
-4. **環境控制參數 (`SHOW_FRONTEND_VER`) 目錄隱蔽：**
-   - 藉由 `.env` 中之 `SHOW_FRONTEND_VER` 參數進行安全控制。
-   - **測試開發環境 (`SHOW_FRONTEND_VER=True`)**：容器啟動時自動建立軟連結 `frontend_ver -> .frontend_ver`，使測試資料夾與內容正常顯現並可供執行。
-   - **正式上線環境 (`SHOW_FRONTEND_VER=False`)**：容器啟動時自動刪除軟連結 `frontend_ver`，徹底隱蔽前端測試資料夾與內容，防範敏感測試腳本洩漏。
-
----
-
-### 🚪 快捷容器進入工具 (Quick Container CLI Entry)
-
-專案根目錄下提供了互動式輔助腳本 [enter_dc.sh](file:///home/dengkai/projects/financial-information/enter_dc.sh)，能讓開發者快速進入指定的 Docker 容器：
-
-```bash
-# 於宿主機執行互動式進入腳本
-bash enter_dc.sh
-
-# 根據提示輸入容器名稱，如：fin_django_backend 或 fin_vue_frontend，腳本將自動選擇 bash / sh 進入容器終端。
-```
-
----
-
-### 本地服務連線網址一覽
-
-| 服務模組 | 網址 (URL) | 預設憑證 / 說明 |
-| :--- | :--- | :--- |
-| **Vue 3.5 前端儀表板** | [http://localhost/tech-stack/](http://localhost/tech-stack/) | 首次自動連線檢測，爾後每 10 分鐘自動重新檢測 |
-| **啟用純文字回應** | [http://localhost/](http://localhost/) | 純文字：`Django + Vue.js Web 資訊系統開發環境的服務已啟用。` |
-| **Django Unfold 後台** | [http://localhost/admin/](http://localhost/admin/) | 帳號: `admin` \| 密碼: `adminpassword123` (含 `employees` 表) |
-| **健康檢查 API** | [http://localhost/api/status/](http://localhost/api/status/) | 回應 MariaDB 與 Redis 連線 JSON 格式數據 |
 
 ---
 
@@ -265,8 +190,8 @@ bash enter_dc.sh
 ├── .env                              # 全局環境變數 (含 user_stock & user_employee 憑證)
 ├── .gitattributes                    # 強制 LF 換行規範 (跨平台支援)
 ├── .gitignore                        # Git 忽略檔規範 (已排除手動測試軟連結與 gnews 產出目錄)
-├── enter_dc.sh                       # 快速進入 Docker 容器之互動式輔助腳本 [NEW]
-├── docker-compose.yaml               # 6 大容器服務編排檔 (含 init-dir 自動初始化目錄與權限修復服務)
+├── enter_dc.sh                       # 快速進入 Docker 容器之互動式輔助腳本
+├── docker-compose.yaml               # 8 大容器服務編排檔 (新增 celery-worker 與 celery-beat 服務)
 ├── README.md                         # 專案詳細說明文件檔
 ├── scripts/
 │   ├── init_dir.sh                  # 自動初始化目錄與跨 OS 權限修復腳本 (init-dir)
@@ -275,44 +200,34 @@ bash enter_dc.sh
 │   ├── deploy_mac.sh                # macOS 平台專用部署與單元測試腳本 (Apple Silicon / Intel)
 │   ├── deploy_windows.ps1            # Windows 平台專用部署與單元測試腳本 (PowerShell)
 │   └── test_health.sh                # 線上服務健康測試腳本
+├── apache/
+│   └── httpd-custom.conf             # Apache HTTPD 反向代理自定義設定檔 (新增 /profile 路由轉接)
 ├── db_conf/
 │   ├── my_custom.cnf                 # MariaDB 參數調校 (innodb_file_per_table=0 NTFS/APFS 相容)
 │   └── init_multi_db.sql             # 雙資料庫 (user_stock_db, db_employee) 初始化腳本
 ├── backend/                          # Django 5.2 後端應用程式
 │   ├── Dockerfile
-│   ├── entrypoint.sh                 # 自動判斷 Host OS (Windows/Linux/Mac) 與初始化
-│   ├── .backend_ver/                 # 後端手動測試驗證環境 (實體隱藏目錄) [NEW]
-│   │   ├── __init__.py               # 模組初始化檔
-│   │   ├── README.md                 # 手動測試說明文件
-│   │   ├── test_django_env.py        # Django 系統環境檢查
-│   │   ├── test_db_conn.py           # MariaDB 連線與 ORM 路由測試
-│   │   ├── test_redis_conn.py        # Redis Cache 連線測試
-│   │   ├── run_all.py                # 整合測試一鍵執行器
-│   │   └── gnews_scraper/            # Google 新聞爬取測試模組 [NEW]
-│   │       ├── v1/                   # v1 版本 (gnews_scraper.py, py_timestamp.py)
-│   │       └── v2/                   # v2 版本 (main.py, news_scraper.py, cli_app.py)
-│   ├── backend_ver/                  # 指向 .backend_ver 之動態軟連結 (僅於 SHOW_BACKEND_VER=True 時顯現)
+│   ├── entrypoint.sh                 # 自動判斷 Host OS (Windows/Linux/Mac)，支援 custom command 參數啟動 Celery
 │   ├── core/
+│   │   ├── celery.py                 # 新增 Celery app 初始化與組態配置 [NEW]
+│   │   ├── tasks.py                  # 新增 2 個台股 Scraper 背景/定時排程任務 [NEW]
+│   │   ├── models.py                 # 定義 4 個台股公司 profile 相關 Model [NEW]
+│   │   ├── scraper/                  # 新增 yfinance/GNews 擷取與英翻中落庫封裝 package [NEW]
+│   │   │   ├── fetcher.py            # 多源數據擷取與日期/翻譯效能清洗優化 [NEW]
+│   │   │   ├── translator.py         # Google 翻譯英翻中介面 [NEW]
+│   │   │   └── db_django.py          # ORM 數據 upsert 落庫與斜線日期格式清洗 [NEW]
 │   │   ├── db_router.py              # 多資料庫路由轉接器 (PrimaryEmployeeRouter)
-│   │   ├── settings.py               # 多 DB 設定與 Unfold 配置
-│   │   ├── tests.py                  # API 端點、多庫路由與 Redis 快取的單元測試
-│   │   └── urls.py                   # 路由配置
+│   │   ├── settings.py               # 多 DB 設定與 Unfold 配置、Celery Redis 連線配置
+│   │   ├── tests.py                  # 新增 StockFeatureTestCase 覆蓋 ORM、API 與 More 頁面單元測試
+│   │   └── urls.py                   # 新增台股查詢 API 與行事曆/新聞詳情分頁之 URL 路由
+│   │   templates/                    # 新增 HTML 詳情分頁渲染模板 [NEW]
+│   │   ├── stock_calendar.html       # 更多行事曆精美深色風 HTML 模板 [NEW]
+│   │   └── stock_news.html           # 更多新聞公告精美深色風 HTML 模板 [NEW]
 │   └── employees/                    # 員工管理模組
-│       ├── models.py                 # 員工主資料表 (employees) Model
-│       ├── admin.py                  # Unfold ModelAdmin 介面
-│       ├── tests.py                  # Employee Model CRUD 與 seed_employees 單元測試
-│       └── management/commands/seed_employees.py # 10 筆測試員工生成指令
 ├── frontend/                         # Vue 3.5 前端應用程式
 │   ├── Dockerfile
-│   ├── entrypoint.sh                 # 前端啟動程序與環境變數判斷 (含 SHOW_FRONTEND_VER 軟連結控制)
-│   ├── .frontend_ver/                # 前端手動測試驗證環境 (實體隱藏目錄) [NEW]
-│   │   ├── run_all.js                # 一鍵整合測試 JS 執行器
-│   │   ├── run_all.sh                # 一鍵整合測試 Shell 腳本
-│   │   ├── test_env.js               # 前端 Node/環境變數驗證
-│   │   ├── test_api.js               # 後端 API 健康連線回應驗證
-│   │   └── test_web.js               # Apache HTTPD 反向代理與前端網頁健康驗證
-│   ├── frontend_ver/                 # 指向 .frontend_ver 之動態軟連結 (僅於 SHOW_FRONTEND_VER=True 時顯現)
-│   └── src/App.vue                   # 前端 Dashboard 介面 (10 分鐘自動檢測)
+│   ├── vite.config.ts                # 將 hmr 設為 false 停用熱重載，徹底解決反向代理下重寫導致的無限刷新
+│   └── src/App.vue                   # 改造為分流呈現 UI（/profile 為台股戰情室；/tech-stack 為系統檢測）
 ├── db_data/                          # MariaDB 12.3 實體目錄持久化區 (Git 忽略)
 └── redis_data/                       # Redis 8.8 實體目錄持久化區 (Git 忽略)
 ```
@@ -326,17 +241,10 @@ bash enter_dc.sh
 | 測試項目 | 測試標的與指令 | 檢驗標準與預期結果 | 通過狀態 |
 | :--- | :--- | :--- | :--- |
 | **統一進入點部署** | `./scripts/deploy.sh` | 自動偵測系統、執行 Docker 構建與單元測試並驗證健康 API | **✓ 通過 (Exit 0)** |
-| **Linux 專用部署** | `./scripts/deploy_linux.sh` | Linux 原生高效能部署與單元測試全數通過 | **✓ 通過 (Exit 0)** |
-| **macOS 專用部署** | `./scripts/deploy_mac.sh` | 架構辨識、APFS 掛載適配、單元測試通過並完成 API 健康驗證 | **✓ 通過 (Exit 0)** |
-| **Windows 專用部署** | `powershell -ExecutionPolicy Bypass -File ./scripts/deploy_windows.ps1` | Docker 構建、自動啟動、單元測試通過並完成 API 健康驗證 | **✓ 通過 (Exit 0)** |
-| **Django 單元測試** | `docker exec django_backend python manage.py test` | 9 項單元測試 (API 端點, 多庫路由, Redis 快取, Employee CRUD, 種子指令) 全數通過 | **✓ 通過 (Ran 9 tests OK)** |
-| **根目錄檢查** | `curl -s http://localhost/` | 網頁出現 `Django + Vue.js Web 資訊系統開發環境` 的文字 | **✓ 通過 (200 OK)** |
-| **API 端點檢查** | `curl -s http://localhost/api/status/` | JSON 檔返回 `database` 與 `redis` 皆為 `"connected"` 成功訊息 | **✓ 通過 (200 OK)** |
-| **頁面功能檢查** | `curl -sI http://localhost/tech-stack/` | `/tech-stack/` 回應 HTTP 200，出現所有技術堆疊圖標與儀表板卡片 | **✓ 通過 (200 OK)** |
+| **Django 單元測試** | `docker compose exec fin-backend python manage.py test core` | 10 項單元測試 (新增台股 ORM, API 查詢, Mock 即時爬取, 詳情渲染) 全數通過 | **✓ 通過 (Ran 10 tests OK)** |
+| **戰情室 URL 檢查** | [http://localhost/profile/](http://localhost/profile/) | 頁籤切換按鈕隱藏，顯示靜態台股搜尋，僅在點選按鍵時發起異步背景更新且順利落庫 | **✓ 通過 (200 OK)** |
+| **健康檢測 URL 檢查**| [http://localhost/tech-stack/](http://localhost/tech-stack/) | 頁籤切換按鈕隱藏，首次載入自動檢測，爾後每 10 分鐘自動定時重新檢測與狀態更新 | **✓ 通過 (200 OK)** |
 | **自動化健康測試** | 執行 `./scripts/test_health.sh` | 終端機顯示 `🎉 所有自動化健康測試均完全通過!` | **✓ 通過 (Exit 0)** |
-| **後端手動測試** | `docker exec fin_django_backend python backend_ver/run_all.py` | 輸出包含 Django 環境、MariaDB 雙庫、Redis 連線之驗證資訊，且全數顯示 🟢 / ✓ | **✓ 通過** |
-| **前端手動測試** | `docker exec fin_vue_frontend node frontend_ver/run_all.js` | 輸出包含 Node 環境、API 連線、Apache 代理網頁健康之驗證資訊 | **✓ 通過** |
-| **環境變數檢查** | 檢查 `.env` 設定檔 | 確認是否有設定 `DJANGO_DEBUG=True`、`SHOW_BACKEND_VER=True` 與 `SHOW_FRONTEND_VER=True` | **✓ 通過** |
 
 ---
 
@@ -344,7 +252,7 @@ bash enter_dc.sh
 
 ### 貢獻指南 (Contributing)
 歡迎提交 Issue 或 Pull Request 以改進此模板。在提交程式碼前，請確保：
-1. Shell 腳本維持 Unix `LF` 換行格式，且執行單元測試 `docker exec django_backend python manage.py test` 全數通過。
+1. Shell 腳本維持 Unix `LF` 換行格式，且執行單元測試 `docker compose exec fin-backend python manage.py test core` 全數通過。
 2. 保持程式碼與設定檔中繁體中文註解與多資料庫說明的完整性。
 
 ### 授權協定 (License)

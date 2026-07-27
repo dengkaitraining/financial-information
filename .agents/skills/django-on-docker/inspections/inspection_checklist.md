@@ -1,40 +1,56 @@
-# Django on Docker 完成後的檢查清單 (Final Inspection)
+# 完成後的檢查與驗證指南 (inspection_checklist.md)
 
-本文件提供開發者或自動化測試流程於系統完成建置與修補後的最終檢核清單與測試指引。
-
----
-
-## 1. 服務容器狀態檢核表
-
-| 檢核項目 | 容器名稱 (Container) | 埠號 mapping | 檢驗標準 / 預期狀態 | 測試與驗證結果 |
-| :--- | :--- | :--- | :--- | :--- |
-| **反向代理網頁伺服器** | `apache_web` | `80:80` | 容器狀態為 `Up`，無 Crash | **通過 (Up)** |
-| **Vue 3.5 前端伺服器** | `vue_frontend` | `5173:5173` | 容器狀態為 `Up`，Vite polling 運作 | **通過 (Up)** |
-| **Django 5.2 後端伺服器** | `django_backend` | `8000:8000` | 容器狀態為 `Up`，Migration 與 DataTables 管理員正常 | **通過 (Up)** |
-| **MariaDB 12.3 資料庫** | `django_db` | `3306:3306` | 容器狀態為 `Up`，包含 `user_stock_db` 與 `db_employee` | **通過 (Up)** |
-| **Redis 8.8 快取伺服器** | `django_redis` | `6379:6379` | 容器狀態為 `Up`，持久化於 `./redis_data` | **通過 (Up)** |
+本文件提供了在部署與開發台股搜尋、儲存與背景排程模組後，如何執行系統性的健康檢查、功能驗證與常見錯誤排查。
 
 ---
 
-## 2. URL 路由與連線功能檢核表
+## 📋 1. 功能檢核清單 (Checklist)
 
-| 測試分類 | 測試 URL / 標的 | 檢驗方法 / 指令 | 預期結果 / 判定條件 | 驗證結果 |
-| :--- | :--- | :--- | :--- | :--- |
-| **根目錄服務檢查** | `http://localhost/` | `curl -s http://localhost/` | 包含文字 `Django + Vue.js Web 資訊系統開發環境` | **通過 (200 OK)** |
-| **健康檢測 API** | `http://localhost/api/status/` | `curl -s http://localhost/api/status/` | JSON 返回 `database` 與 `redis` 皆為 `"connected"` | **通過 (200 OK)** |
-| **Vue 3.5 儀表板** | `http://localhost/tech-stack/` | `curl -sI http://localhost/tech-stack/` | 回應 HTTP `200 OK` HTML，顯示所有技術圖標 | **通過 (200 OK)** |
-| **DataTables 管理員** | `http://localhost/admin/db-manager/` | 存取 `/admin/db-manager/` | 檢查帳號切換 (`user_stock`/`user_employee`)、SHOW DATABASES & DataTables CRUD | **通過 (200 OK/302)** |
-| **群組權限管制** | `can_manage_db_tables` 權限 | 測試非授權使用者連線 | 回傳 HTTP 403 Forbidden 拒絕存取 | **通過 (403)** |
-| **自動化測試腳本** | `./scripts/test_health.sh` | 執行 `./scripts/test_health.sh` | 顯示 `🎉 所有自動化健康測試均完全通過!` | **通過 (Exit 0)** |
-| **後端手動測試** | `python backend_ver/run_all.py` | 進入 `fin_django_backend` 執行驗證 | Django 檢查、DB 雙庫讀寫、Redis 測試、GNews 爬蟲測試皆順利通過 | **通過** |
-| **前端手動測試** | `node frontend_ver/run_all.js` | 進入 `fin_vue_frontend` 執行驗證 | Node 環境、API 連線、Apache 網頁健康檢測皆通過 | **通過** |
-| **快捷進入工具** | `bash enter_dc.sh` | 於宿主機執行並輸入目標容器名稱 | 順利開啟目標容器 terminal shell | **通過** |
-| **環境變數檢查** | `.env` 設定檔 | 檢查 `.env` | `DJANGO_DEBUG=True`、`SHOW_BACKEND_VER=True` 且 `SHOW_FRONTEND_VER=True` | **通過** |
+| 檢驗項目 | 檢查要點與標準 | 驗證操作步驟 |
+| :--- | :--- | :--- |
+| **1. 路由分開驗證** | `/profile/` 網頁無 Tabs 切換，僅顯示台股基本資料；`/tech-stack/` 無 Tabs 切換，僅顯示健康監控。 | 造訪 [http://localhost/profile/](http://localhost/profile/) 與 [http://localhost/tech-stack/](http://localhost/tech-stack/) |
+| **2. 自動刷新消除** | 在任一路徑下，打開網頁均不會發生每秒一次的反覆重新整理 (Full Page Reload) 循環。 | 檢視瀏覽器 Console 或是 network 請求 |
+| **3. 靜態/動態更新** | `/profile/` 網載入時完全不執行任何請求，只有按按鈕才更新。`/tech-stack/` 載入時會自動執行 1 次，爾後每 10 分鐘自動定時檢查。 | 檢視頁面上之說明字樣與 network 發起的請求 |
+| **4. 異步更新與落庫** | `/profile/` 點擊「即時更新並儲存」後，能立即提示任務啟動並在數秒後動態渲染出台積電的 25 欄位資料。 | 輸入 `2330` 並點擊「⚡ 即時更新並儲存」 |
+| **5. More 詳情頁面** | 點擊重大行事曆與新聞公告區的 `MORE +` 按鈕，能在新分頁渲染出對應股票的全部內容。 | 點擊 More 按鈕，確認新分頁載入正常 |
+| **6. Unfold 管理後台** | 左側選單具備台股 profile 的四個 Model 資料表；且 `Periodic tasks` 能正常載入與編輯。 | 登入後台 [http://localhost/admin/](http://localhost/admin/) (帳密: `admin`/`adminpassword123`) |
+| **7. 單元測試健康** | core app 的單元測試全數跑過 (10 項測試 OK)。 | 於宿主機執行 `docker compose exec fin-backend python manage.py test core` |
 
 ---
 
-## 相關文件連結
-- 返回主要技能規範：[SKILL.md](../SKILL.md)
-- 準則細部資訊：[rules_detail.md](../rules/rules_detail.md)
-- 指定工具細部資訊：[tools.md](../scripts/tools.md)
-- 逐步解說細部資訊：[walkthrough_details.md](../references/walkthrough_details.md)
+## 🧪 2. 單元測試與自動化驗證指令
+
+### 執行單元測試
+```bash
+# 執行 core 模組全套單元測試 (含 ORM 欄位約束、API 查詢、Mock即時爬蟲更新與詳情渲染)
+docker compose exec fin-backend python manage.py test core
+```
+* **預期輸出**：`Ran 10 tests in 0.146s ... OK`。
+
+### 執行自動化健康檢測
+```bash
+# 執行專案自定義健康測試腳本
+./scripts/test_health.sh
+```
+* **預期輸出**：`🎉 所有自動化健康測試均完全通過!`。
+
+---
+
+## 🐞 3. 常見錯誤與排查步驟 (Troubleshooting)
+
+### 1. 頁面一直 reload (自動刷新)
+* **原因**：Vite 的 HMR WebSocket 斷線或是 base URL pathname 不匹配，觸發 Vite 客戶端的安全重試機制。
+* **排查與解法**：確認 [vite.config.ts](file:///home/dengkai/projects/financial-information/frontend/vite.config.ts) 中，`server.hmr` 已被設為 `false`，且已執行 `docker compose restart fin-frontend`。
+
+### 2. 即時更新時發生 502 / 504 錯誤或是卡死逾時
+* **原因**：沒有使用非同步，或是 GNews 爬蟲對每筆新聞執行了無謂的 Google 翻譯。
+* **排查與解法**：
+  * 確認 [views.py](file:///home/dengkai/projects/financial-information/backend/core/views.py) 的 `update_mode` 已使用 `update_single_stock.delay(stock_id)` 進行異步任務派發，而非在 view 中同步調用 scraper。
+  * 確認 [fetcher.py](file:///home/dengkai/projects/financial-information/backend/core/scraper/fetcher.py) 已移除新聞標題和摘要的 `self.translator.translate` 翻譯調用。
+
+### 3. Celery 任務沒有執行（資料庫沒有寫入）
+* **原因**：Celery Worker 容器因為被 `entrypoint.sh` 中的 `runserver` 覆蓋而沒有真正執行 Celery 服務。
+* **排查與解法**：
+  * 確認 [entrypoint.sh](file:///home/dengkai/projects/financial-information/backend/entrypoint.sh) 的最後一行支援 `exec "$@"` 自定義指令傳入。
+  * 執行 `docker compose ps` 確認 `fin_celery_worker` 與 `fin_celery_beat` 狀態皆為 `Up`。
+  * 執行 `docker compose logs fin-celery-worker` 檢視 Worker 中是否成功列出 `[tasks]` 清單並有收到 `Task core.tasks.update_single_stock received` 日誌。

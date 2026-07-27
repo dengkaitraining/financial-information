@@ -1,61 +1,92 @@
-# Django on Docker 逐步解說細部資訊 (Walkthrough Reference)
+# 台股搜尋、儲存與定時排程系統逐步解說 (walkthrough_details.md)
 
-本參考文件詳細記載 **Python Django 5.2 + Vue 3.5 + Apache HTTPD + MariaDB 12.3 (多庫多帳號) + Redis 8.8** 容器化系統架構與各元件之協作細節。
-
----
-
-## 1. 系統服務架構與轉接對照表
-
-| 服務模組 | 容器名稱 (Container) | 監聽 Port | 反向代理對應路徑 | 服務職責與處理內容 |
-| :--- | :--- | :--- | :--- | :--- |
-| **Apache HTTPD** | `apache_web` | `80:80` | `/tech-stack/`, `/`, `/admin/`, `/admin/db-manager/`, `/api/` | 統一反向代理進入點、載入自定義設定檔 `httpd-custom.conf` |
-| **Vue.js 3.5** | `vue_frontend` | `5173` | `/tech-stack/` 及 `/_hmr` | 提供系統儀表板 (Vite `base: /tech-stack/`)，含 10 分鐘自動連線檢測 |
-| **Django 5.2** | `django_backend` | `8000` | `/`, `/admin/`, `/admin/db-manager/`, `/api/status/` | 提供純文字、Unfold、DataTables 管理員與 `employees` 表單管理 |
-| **MariaDB 12.3** | `django_db` | `3306:3306` | 由 Backend 內部連線 (`db:3306`) | 包含 `user_stock_db` 與 `db_employee`，提供 `user_stock` 與 `user_employee` 存取 |
-| **Redis 8.8** | `django_redis` | `6379:6379` | 由 Backend 內部連線 (`redis:6379`) | 處理 Django 高併發 Session 與快取資料，掛載實體目錄 `./redis_data` |
+本文件詳細說明了「台股公司基本資料 (Profile) 搜尋、儲存、背景排程與戰情室系統」的架構時序、各組件程式與設定檔之實作細節。
 
 ---
 
-## 2. MariaDB 12.3 多帳號與 DataTables 管理員運作階段表
+## 🚀 1. 異步非同步爬取與輪詢時序架構
 
-| 協作階段 | 運作機制與組件 | 詳細說明與功能描述 |
-| :--- | :--- | :--- |
-| **1. 多帳號連線設定** | `.env` & `init_multi_db.sql` | 建立 `user_stock` (`user_stock_db`) 與 `user_employee` (`db_employee`) 帳號與讀寫權限 |
-| **2. ORM 路由分發** | `PrimaryEmployeeRouter` | 將 `employees` App 導向至 `employee_db`，其他 Model 導向至 `default` |
-| **3. 員工表與數據種子** | `employees` & `seed_employees` | Migration 建立 `employees` 資料表，`seed_employees` 自動建立 10 筆隨機測試資料 |
-| **4. 帳號切換與權限審計** | `db_manager_index` | 支援 `user_stock` 與 `user_employee` 切換，執行 `SHOW DATABASES`, `SHOW TABLES`, `SHOW GRANTS` |
-| **5. DataTables CRUD API**| `db_manager_query/crud_api` | 整合 DataTables.net AJAX 實現資料表搜尋、新增 (Insert)、修改 (Update) 與刪除 (Delete) |
-| **6. 群組權限防護** | `can_manage_db_tables` 權限 | 僅超級管理員或 `Database Managers` 群組成員可存取，非授權者回傳 HTTP 403 Forbidden |
+在 GNews RSS 和 yfinance RSS 資料抓取時，由於呼叫了大量的外部網路請求，若是在 HTTP 連線中同步等待，通常耗時會超過 30 秒，極易引發 HTTP Timeout 或 Apache 502/504 錯誤。
 
-## 3. 後端手動測試與驗證環境 (backend_ver)
+因此，本系統設計了**「非同步 Celery 任務分派 + 前端 3 秒間隔動態輪詢」**的無阻塞架構：
 
-專案內建的 `backend_ver` 模組旨在提供一個獨立、安全的手動測試驗證平台：
+```mermaid
+sequenceDiagram
+    participant User as 使用者
+    participant Vue_Frontend as Vue 3.5 前台
+    participant Django_Backend as Django 5.2 後端
+    participant Redis as Redis 訊息隊列 (Broker)
+    participant Celery_Worker as Celery背景執行 Worker
+    participant MariaDB as MariaDB 資料庫
 
-1. **進入容器：** 透過 `docker exec -it fin_django_backend bash` / `sh` 直接進入後端容器 Shell。
-2. **驗證腳本執行：** 
-   - `test_django_env.py`: 觸發 Django System Check，檢測 Model 定義與 System App 初始化是否有潛在錯誤。
-   - `test_db_conn.py`: 驗證 DB 路由轉接，比對 `default` 與 `employee_db` 的真實連線帳號與資料庫筆數。
-   - `test_redis_conn.py`: 使用 `django_redis` 連線，透過快取讀寫刪除 (Set/Get/Delete) 確保 Redis 機制運作如預期。
-3. **整合報告：** 執行 `run_all.py` 會串聯上述三者，自動格式化輸出結果，方便開發人員與系統維運人員在進行系統微調、資料庫移轉或 Host OS 環境變更時快速定位問題。
+    User->>Vue_Frontend: 輸入股票代碼 "2330" 並點擊「⚡ 即時更新並儲存」
+    Vue_Frontend->>Django_Backend: GET /api/stock/fetch/?stock_id=2330&update=true
+    
+    Note over Django_Backend: 1. 建立排程 StockScheduleList 紀錄<br/>2. 投遞 update_single_stock.delay("2330") 至 Redis
+    Django_Backend-->>Vue_Frontend: 立即回傳 {"success": true, "task_started": true} (耗時 < 0.5s)
+    
+    Note over Vue_Frontend: 進入 Loading 狀態，啟動 3 秒輪詢定時器
 
-## 4. 前端手動測試與驗證環境 (frontend_ver)
+    par 背景爬取與落庫 (異步)
+        Redis->>Celery_Worker: 提取任務執行 update_single_stock("2330")
+        Celery_Worker->>Celery_Worker: 執行 yfinance 爬蟲擷取 Profile (25欄位) 與行事曆
+        Celery_Worker->>Celery_Worker: 執行 GNews 爬蟲擷取近 100 筆新聞與個股公告
+        Celery_Worker->>Celery_Worker: 對英文經營概況進行英翻中翻譯 (跳過本機中文新聞翻譯)
+        Celery_Worker->>MariaDB: 格式清洗後以 update_or_create 儲存資料
+        Note over Celery_Worker: 任務完成 (Succeeded)
+    and 前台定時輪詢 (3秒間隔)
+        loop 每 3 秒輪詢
+            Vue_Frontend->>Django_Backend: GET /api/stock/fetch/?stock_id=2330&update=false
+            Django_Backend->>MariaDB: 查詢本機資料
+            MariaDB-->>Django_Backend: 回傳資料 (若未寫完則 profile 為空)
+            Django_Backend-->>Vue_Frontend: 回傳 has_data (Boolean)
+        end
+    end
 
-專案內建的 `frontend_ver` 模組提供前端容器內的獨立驗證：
-1. **進入容器：** 透過 `docker exec -it fin_vue_frontend sh` 直接進入前端容器（亦可執行 `./enter_dc.sh`）。
-2. **驗證腳本執行：**
-   - `test_env.js`: 驗證 Node 執行環境與 Docker 容器內部的環境變數載入狀態。
-   - `test_api.js`: 對後端健康檢測 API 端點執行請求，確認前後端容器間的網路通訊及跨容器 API 呼叫功能。
-   - `test_web.js`: 模擬外部對網頁代理伺服器的連線，驗證 Apache 反向代理轉接前端 Vite 開發伺服器是否暢通。
-3. **整合報告：** 可透過執行 `node frontend_ver/run_all.js` 或是 `./frontend_ver/run_all.sh` 一鍵執行前述所有前端健康檢查。
-
-## 5. 快捷容器進入工具 (enter_dc.sh)
-
-在專案根目錄提供了互動式 CLI 進入腳本 [enter_dc.sh](file:///home/dengkai/projects/financial-information/enter_dc.sh)，開發者在宿主機只需執行 `bash enter_dc.sh` 並輸入容器名稱（如：`fin_django_backend`），即可快速開啟容器內的 CLI 終端，無須記憶冗長的 `docker exec` 語法。
+    Note over Vue_Frontend: 輪詢收到 has_data: true
+    Note over Vue_Frontend: 關閉定時器，將戰情室 Dashboard 渲染顯示
+    Vue_Frontend-->>User: 顯示台積電精美基本資料、重大行事曆與新聞
+```
 
 ---
 
-## 相關文件連結
-- 返回主要技能規範：[SKILL.md](../SKILL.md)
-- 準則細部資訊：[rules_detail.md](../rules/rules_detail.md)
-- 指定工具細部資訊：[tools.md](../scripts/tools.md)
-- 任務計畫紀錄：[01_implementation_plan.md](../task_logs/01_implementation_plan.md)
+## 🌐 2. 路由分開與雙網頁呈現設計
+
+根據使用者最新需求，我們分開了「戰情室（台股基本資料）」與「系統檢測（健康監控）」的路由，並在 Apache 與前端做了解耦：
+
+### 1. Apache 反向代理路由轉接 ([httpd-custom.conf](file:///home/dengkai/projects/financial-information/apache/httpd-custom.conf))
+Apache 在 Port 80 監聽，並依據 Location 將請求轉發：
+* `/tech-stack` -> 轉接至前端容器 `http://fin-frontend:5173/tech-stack`。
+* `/profile` -> 轉接至前端容器 `http://fin-frontend:5173/tech-stack`。
+* `/admin` -> 轉接至後端 Django 容器的 admin 後台。
+* `/api` -> 轉接至後端 Django 容器的健康檢測與股票查詢端點。
+
+### 2. 前端路由解耦與 HMR 消除 ([App.vue](file:///home/dengkai/projects/financial-information/frontend/src/App.vue))
+由於 Vite 配置的 `base` 為 `/tech-stack/`，而使用者訪問的路徑變為 `/profile/` 時會產生 **Pathname Mismatch**，導致 Vite 客戶端反覆引發 reload 重刷。我們在 [vite.config.ts](file:///home/dengkai/projects/financial-information/frontend/vite.config.ts) 中將 `hmr` 設為 `false` 停用熱重載，完全解決了重刷問題。
+
+在 [App.vue](file:///home/dengkai/projects/financial-information/frontend/src/App.vue) 中，藉由 setup 內的路徑判定，動態分流呈現頁面，並隱藏分頁頁籤按鈕，讓兩者以獨立網頁靜態呈現：
+* **造訪 `http://localhost/profile/` 時**：
+  * `activeTab` 切換至 `dashboard`。
+  * `showTabs` 設為 `false` (隱藏切換頁籤)。
+  * 網頁顯示「台股公司基本資料戰情室」，且預設為完全靜態呈現，僅在點擊「搜尋」或「即時更新並儲存」時才與後端交互。
+* **造訪 `http://localhost/tech-stack/` 時**：
+  * `activeTab` 切換至 `health`。
+  * `showTabs` 設為 `false` (隱藏切換頁籤)。
+  * 網頁顯示「系統檢測與健康監控」，且預設啟用首次載入自動檢測與 10 分鐘定時自動重新連線檢查。
+
+---
+
+## 📦 3. 後端 API 與 More 詳情頁面
+
+* **`/api/stock/fetch/`**：
+  * 提供股票查詢 API。若帶入 `update=true` 則立即指派 Celery背景 worker 更新並向前端回傳 `task_started: true`；若為 `update=false` 則只查詢資料庫中已有的 Profile 欄位、前 10 筆行事曆與新聞公告，並序列化為 JSON 回傳。
+* **`/stock/calendar/<stock_id>/` 與 `/stock/news/<stock_id>/`**：
+  * 當使用者在前台點擊 "MORE +" 時，會在新分頁開啟此視圖。後端會使用 Django Template 載入 [stock_calendar.html](file:///home/dengkai/projects/financial-information/backend/templates/stock_calendar.html) 與 [stock_news.html](file:///home/dengkai/projects/financial-information/backend/templates/stock_news.html)，依託 Tailwind CSS 渲染為高顏值的深色戰情風 Full List 清單。
+
+---
+
+## 📅 4. Celery Beat 定期任務調度
+
+* 後端使用了 `django-celery-beat` 套件，將排程定時任務儲存在資料庫中。
+* 定時任務會呼叫 `core.tasks.update_all_scheduled_stocks()`。該任務會遍歷 `StockScheduleList` 模型中的股票代碼，並在背景依序執行資料更新落庫。
+* 管理員可登入 Unfold 後台，於 `Periodic tasks` 圖形化界面配置 Crontab 參數，設定每日/每週定時更新。

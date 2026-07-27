@@ -327,3 +327,25 @@ description: 提供基於 Docker Compose 容器化技術之 Python Django 5.2 LT
  5. 手動測試單元：cli.py
  6. 英文翻譯單元：translator.py
 </ref>
+
+------
+2026-07-27 16:33
+# 在不變更原檔案架構的基礎上，依據上述的對話內容與專案現況增加<reademe>、<task_log>、<skill>資訊：
+ <reademe>
+  - 「README.md 說明檔資訊」(README.md)。
+  - 更新專案內的程式、服務設定檔(docker-compose.yaml, .env, .yaml, .env, .sh, Dockerfile 等設定檔)的詳細說明與功能描述。
+ </reademe>
+ <task_log>
+  - 「實作計畫 (Implementation Plan)」的資訊(/.agents/skills/django-on-docker/task_logs/01_implementation_plan.md)。
+  - 「任務清單 (Task List)」資訊儲存在專案內的資訊(/.agents/skills/django-on-docker/task_logs/02_task_list.md)。
+  - 「逐步解說 (Walkthrough)」資訊儲存在專案內的資訊(/.agents/skills/django-on-docker/task_logs/03_walkthrough.md)。
+ </task_log>
+ <skill>
+  - 修改 .agents/skills/django-on-docker/SKILL.md 檔案資訊包含：
+   (1) SKILL 飆頭描述 (name, description)。
+   (2) 角色定位 (role)。
+   (3) 準則 (rules)。
+   (4) 指定工具 (tools)：指定工具細部資訊，以 markdown 檔案儲存在 .agents/skills/django-on-docker/scripts/ 的資料夾內。
+   (5) 逐步解說 (Walkthrough)：逐步解說項目細部資訊，以 markdown 檔案儲存在 .agents/skills/django-on-docker/references/ 的資料夾內。
+   (6) 完成後的檢查 (Final inspection)：檢查作業細部資訊，以 markdown 檔案儲存在 .agents/skills/django-on-docker/inspections/ 的資料夾內。
+ </skill>

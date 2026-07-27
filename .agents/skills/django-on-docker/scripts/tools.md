@@ -1,38 +1,93 @@
-# Django on Docker 指定工具細部資訊 (Tools)
+# Django on Docker 常用指令與指定工具指南 (tools.md)
 
-本文件詳細記載用於建置、管理、維護與自動化測試 Django on Docker 容器堆疊之指定工具與命令。
-
----
-
-## 1. 工具與命令對照表
-
-| 工具 / 指令名稱 | 類型與所在位置 | 主要功能與說明 | 使用時機與範例 |
-| :--- | :--- | :--- | :--- |
-| **`docker compose up --build -d`** | 容器編排工具 | 重新編譯 `web`, `backend`, `frontend` 映像檔，並以背景模式啟動全數容器 | 啟動或更新部署時 |
-| **`python manage.py seed_employees`** | 種子資料產生指令 | 自動在 `db_employee` 資料庫之 `employees` 表生成 10 筆測試員工資料 | 資料庫初始化或測試時 |
-| **`/admin/db-manager/api/crud/`** | DataTables CRUD API | 接收 POST JSON Payload，動態執行 SQL INSERT, UPDATE, DELETE 記錄操作 | DataTables 表單線上即時編輯時 |
-| **`netcat-openbsd (nc)`** | 網路與健康等待工具 | 對 MariaDB 3306 Port 進行 TCP 健康輪詢，確認資料庫就緒 | `entrypoint.sh` 啟動 Migration 前 |
-| **`./scripts/test_health.sh`** | 自動化測試腳本 | 自動測試根目錄純文字、API JSON 狀態、Vue 200 OK 與 `.env` 變數 | 建置完成後進行整合測試時 |
-| **`python backend_ver/run_all.py`** | 後端手動驗證整合執行器 | 一鍵驗證後端環境變數、Django 自我檢查、MariaDB 雙資料庫連線與 Redis 緩存讀寫 | 進入 `fin_django_backend` 進行後端服務與多資料庫手動測試驗證時 |
-| **`node frontend_ver/run_all.js`** | 前端手動驗證整合執行器 | 一鍵驗證前端 Node 環境變數、API 埠口連線與 Apache 反代理網頁健康度 | 進入 `fin_vue_frontend` 進行前端服務手動測試驗證時 |
-| **`bash enter_dc.sh`** | 快捷容器進入工具 | 提供互動式 CLI 介面，讓開發者輸入容器名稱即可快速開啟 bash/sh 終端 | 在宿主機需要快速進入容器進行調試或手動測試時 |
+本文件整理了在此 Django on Docker 容器化技術堆疊中，管理、開發、遷移、與測試背景排程服務所使用的常用指令與指定工具。
 
 ---
 
-## 2. 自動化測試腳本說明 (`./scripts/test_health.sh`)
+## 🐳 1. Docker Compose 容器管理
 
-本專案提供獨立的自動化測試腳本，位於 [../../../scripts/test_health.sh](../../../scripts/test_health.sh)：
+### 服務啟動與關閉
+```bash
+# 原生一鍵自動偵測部署與測試
+./scripts/deploy.sh
 
-| 測試步驟 | 測試目標與網址 | 檢驗標準 / 回應條件 |
-| :--- | :--- | :--- |
-| **步驟 1** | 根目錄 `http://localhost/` | 是否包含文字 `Django + Vue.js Web 資訊系統開發環境` |
-| **步驟 2** | API 端點 `http://localhost/api/status/` | JSON 資料庫 (`database`) 與快取 (`redis`) 狀態均為 `"connected"` |
-| **步驟 3** | 儀表板頁面 `http://localhost/tech-stack/` | HTTP 狀態碼為 `200 OK` |
-| **步驟 4** | 環境變數設定檔 `.env` | 是否設定 `DJANGO_DEBUG=True` 且 `DJANGO_ALLOWED_HOSTS` 包含 `localhost` 或 `*` |
+# 啟動所有容器服務 (背景運行)
+docker compose up -d
+
+# 強制重建並啟動所有容器服務
+docker compose up -d --build
+
+# 停止並刪除所有容器、Bridge 網路
+docker compose down
+
+# 停止所有容器服務但不刪除
+docker compose stop
+```
+
+### 檢視容器狀態與日誌
+```bash
+# 檢視所有運行中的服務容器與狀態
+docker compose ps
+
+# 檢視後端 Django 容器即時日誌
+docker compose logs -f fin-backend
+
+# 檢視背景 Celery Worker 容器即時日誌
+docker compose logs -f fin-celery-worker
+
+# 檢視定期排程 Celery Beat 容器即時日誌
+docker compose logs -f fin-celery-beat
+```
 
 ---
 
-## 相關文件連結
-- 返回主要技能規範：[SKILL.md](../SKILL.md)
-- 準則細部資訊：[rules_detail.md](../rules/rules_detail.md)
-- 逐步解說細部資訊：[walkthrough_details.md](../references/walkthrough_details.md)
+## 📦 2. Django 5.2 數據庫遷移與管理
+
+所有 Models 欄位變更或新增時，均必須採用 Django 內建遷移版控工具：
+
+```bash
+# 1. 針對特定 core app 產生資料庫遷移檔
+docker compose exec fin-backend python manage.py makemigrations core
+
+# 2. 套用遷移至 MariaDB 資料庫 (應用遷移)
+docker compose exec fin-backend python manage.py migrate
+
+# 3. 進入 Django shell 互動式終端
+docker compose exec fin-backend python manage.py shell
+
+# 4. 生成 10 筆測試員工主資料 (seed 指令)
+docker compose exec fin-backend python manage.py seed_employees
+```
+
+---
+
+## 🧪 3. 單元測試與健康度檢查
+
+在提交程式碼前，必須執行全套單元測試與健康檢查，以保證服務功能完整：
+
+```bash
+# 1. 執行後端 core 模組全套單元測試 (含 ORM 欄位約束、API、詳情頁渲染與 Mock 即時爬蟲)
+docker compose exec fin-backend python manage.py test core
+
+# 2. 執行線上服務自動化健康檢測 (檢測 URL、API、連線變數)
+./scripts/test_health.sh
+```
+
+---
+
+## 🛠️ 4. 快捷 CLI 進入與手動驗證環境
+
+### 進入容器
+```bash
+# 使用互動式腳本快速進入指定容器的 shell
+bash enter_dc.sh
+```
+
+### 執行手動驗證模組
+```bash
+# 進入 Django 後端容器並執行一鍵整合手動驗證 (資料庫/快取連線)
+docker compose exec fin-backend python backend_ver/run_all.py
+
+# 進入 Vue 前端容器並執行一鍵整合手動驗證 (Node環境/API響應/Apache轉接)
+docker compose exec fin-frontend node frontend_ver/run_all.js
+```
