@@ -9,20 +9,20 @@ class TAAnalyzer:
     def __init__(self):
         self.translator = Translator()
 
-    def get_yf_symbol(self, symbol):
+    def get_yf_stock_id(self, stock_id):
         """透過 twstock 判斷台灣上市/上櫃代碼"""
-        if symbol in twstock.codes:
-            market = twstock.codes[symbol].market
-            return f"{symbol}.TW" if market == "上市" else f"{symbol}.TWO"
-        return f"{symbol}.TW"
+        if stock_id in twstock.codes:
+            market = twstock.codes[stock_id].market
+            return f"{stock_id}.TW" if market == "上市" else f"{stock_id}.TWO"
+        return f"{stock_id}.TW"
 
-    def fetch_company_info(self, symbol):
+    def fetch_company_info(self, stock_id):
         """抓取並翻譯公司簡介 (英轉中)"""
-        yf_symbol = self.get_yf_symbol(symbol)
-        ticker = yf.Ticker(yf_symbol)
+        yf_stock_id = self.get_yf_stock_id(stock_id)
+        ticker = yf.Ticker(yf_stock_id)
         
         info = ticker.info
-        name = info.get("shortName", symbol)
+        name = info.get("shortName", stock_id)
         summary_en = info.get("longBusinessSummary", "")
         
         if not summary_en:
@@ -35,10 +35,10 @@ class TAAnalyzer:
             
         return name, summary_zh
 
-    def calculate_ta(self, symbol, period_str):
+    def calculate_ta(self, stock_id, period_str):
         """抓取資料並計算技術指標，最後根據使用者指定的 period_str 進行資料篩選"""
-        yf_symbol = self.get_yf_symbol(symbol)
-        ticker = yf.Ticker(yf_symbol)
+        yf_stock_id = self.get_yf_stock_id(stock_id)
+        ticker = yf.Ticker(yf_stock_id)
         
         # 強制抓取 1 年歷史資料，確保長天期均線與 MACD 計算有足夠的前置數據
         df = ticker.history(period="1y")

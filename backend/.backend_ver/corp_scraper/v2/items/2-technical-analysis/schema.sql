@@ -4,7 +4,7 @@ USE stock_db;
 
 -- 建立技術分析資料表
 CREATE TABLE IF NOT EXISTS technical_analysis (
-    symbol VARCHAR(20) NOT NULL COMMENT '股票代號',
+    stock_id VARCHAR(20) NOT NULL COMMENT '股票代號',
     trade_date DATE NOT NULL COMMENT '交易日期',
     
     -- 基本價量
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS technical_analysis (
     mdi DECIMAL(20, 4) COMMENT '-DI',
     adx DECIMAL(20, 4) COMMENT 'ADX',
     
-    PRIMARY KEY (symbol, trade_date)
+    PRIMARY KEY (stock_id, trade_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='個股技術分析資料表';
 
 -- 4. 使用者權限設定

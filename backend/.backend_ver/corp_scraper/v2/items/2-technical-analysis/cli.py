@@ -35,7 +35,7 @@ def main():
     print("=== Yahoo 股市風格：技術分析資料(TA) 擷取系統 ===")
     
     analyzer = TAAnalyzer()
-    db = DBHandler('172.18.0.3', os.getenv("DB_USER"), os.getenv("DB_PASSWORD"), 'stock_db') # 記得確認 db_handler.py 內的密碼設定正確
+    db = DBHandler(host='172.18.0.4', user=os.getenv("DB_USER"), password=os.getenv("DB_PASSWORD"), db='stock_db') # 記得確認 db_handler.py 內的密碼設定正確
 
     while True:
         stock_id = input("\n請輸入台股代碼 (輸入 'q' 退出): ").strip()

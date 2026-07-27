@@ -23,19 +23,19 @@ class DatabaseManager:
 
     def upsert_profile(self, profile: Dict) -> bool:
         """寫入或更新公司基本資料 (ON DUPLICATE KEY UPDATE)"""
-        if not profile or not profile.get('symbol'):
+        if not profile or not profile.get('stock_id'):
             logging.info("No profile data to write.")
             return False
 
         sql = """
         INSERT INTO company_profile (
-            symbol, tax_id, company_name, spokesperson, eng_short_name, deputy_spokesperson,
+            stock_id, tax_id, company_name, spokesperson, eng_short_name, deputy_spokesperson,
             establishment_date, phone, listing_date, fax, industry_category, website,
             chairman, email, general_manager, stock_transfer_agent, capital, auditor,
             issued_shares, address, market_cap_millions, market_type, insider_holding_ratio,
             group_name, main_business
         ) VALUES (
-            %(symbol)s, %(tax_id)s, %(company_name)s, %(spokesperson)s, %(eng_short_name)s, %(deputy_spokesperson)s,
+            %(stock_id)s, %(tax_id)s, %(company_name)s, %(spokesperson)s, %(eng_short_name)s, %(deputy_spokesperson)s,
             %(establishment_date)s, %(phone)s, %(listing_date)s, %(fax)s, %(industry_category)s, %(website)s,
             %(chairman)s, %(email)s, %(general_manager)s, %(stock_transfer_agent)s, %(capital)s, %(auditor)s,
             %(issued_shares)s, %(address)s, %(market_cap_millions)s, %(market_type)s, %(insider_holding_ratio)s,
@@ -74,8 +74,8 @@ class DatabaseManager:
             return 0
 
         sql = """
-        INSERT INTO company_calendar (symbol, event_type, event_date, description)
-        VALUES (%(symbol)s, %(event_type)s, %(event_date)s, %(description)s)
+        INSERT INTO company_calendar (stock_id, event_type, event_date, description)
+        VALUES (%(stock_id)s, %(event_type)s, %(event_date)s, %(description)s)
         ON DUPLICATE KEY UPDATE
             description = VALUES(description);
         """
@@ -92,14 +92,14 @@ class DatabaseManager:
         return written_count
 
     def upsert_news(self, news_list: List[Dict]) -> int:
-        """批次寫入或更新新聞與公告 (基於 symbol + url 防重複)"""
+        """批次寫入或更新新聞與公告 (基於 stock_id + url 防重複)"""
         if not news_list:
             logging.info("No news data to write.")
             return 0
 
         sql = """
-        INSERT INTO company_news (symbol, news_type, title, url, publisher, published_date, summary)
-        VALUES (%(symbol)s, %(news_type)s, %(title)s, %(url)s, %(publisher)s, %(published_date)s, %(summary)s)
+        INSERT INTO company_news (stock_id, news_type, title, url, publisher, published_date, summary)
+        VALUES (%(stock_id)s, %(news_type)s, %(title)s, %(url)s, %(publisher)s, %(published_date)s, %(summary)s)
         ON DUPLICATE KEY UPDATE
             title = VALUES(title),
             publisher = VALUES(publisher),

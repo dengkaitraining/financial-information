@@ -30,7 +30,7 @@ def main():
     
     # 請在此處調整您的 MariaDB 資料庫連線設定
     db = DatabaseManager(
-        host='172.18.0.3',
+        host='172.18.0.4',
         port=3306,
         user=os.getenv("DB_USER"),
         password=os.getenv("DB_PASSWORD"),
@@ -38,26 +38,26 @@ def main():
     )
 
     while True:
-        symbol = input("\n[?] 請輸入要查詢的台灣股票代碼 (輸入 Q 離開): ").strip()
-        if symbol.upper() == 'Q':
+        stock_id = input("\n[?] 請輸入要查詢的台灣股票代碼 (輸入 Q 離開): ").strip()
+        if stock_id.upper() == 'Q':
             print("系統已結束作業。")
             break
 
-        if not symbol.isdigit():
+        if not stock_id.isdigit():
             print("[-] 錯誤：股票代碼必須為數字，請重新輸入。")
             continue
 
-        print(f"\n[*] 正在搜尋並擷取 {symbol} 的公司基本資料、行事曆與新聞/公告...")
+        print(f"\n[*] 正在搜尋並擷取 {stock_id} 的公司基本資料、行事曆與新聞/公告...")
         
         # 擷取 basic profile
-        profile = fetcher.fetch_profile(symbol)
+        profile = fetcher.fetch_profile(stock_id)
         
         # 擷取 calendar
-        calendar = fetcher.fetch_calendar(symbol)
+        calendar = fetcher.fetch_calendar(stock_id)
         
         # 擷取 news & announcements
-        company_name = profile.get('company_name', symbol)
-        news, announcements = fetcher.fetch_news_and_announcements(symbol, company_name)
+        company_name = profile.get('company_name', stock_id)
+        news, announcements = fetcher.fetch_news_and_announcements(stock_id, company_name)
 
         # 顯示擷取結果供使用者確認
         print("\n" + "="*20 + " 1. 公司基本資料 (Profile) " + "="*20)
@@ -81,7 +81,7 @@ def main():
 
         # 2. 使用者確認步驟
         print("\n" + "-" * 65)
-        confirm = input(f"[?] 請確認是否將以上 {symbol} 資料寫入 MariaDB 12.3 資料庫？ (Y/N): ").strip().upper()
+        confirm = input(f"[?] 請確認是否將以上 {stock_id} 資料寫入 MariaDB 12.3 資料庫？ (Y/N): ").strip().upper()
         
         if confirm == 'Y':
             print("\n[*] 開始執行資料庫寫入 (使用 ON DUPLICATE KEY UPDATE 確保無重複數據)...")

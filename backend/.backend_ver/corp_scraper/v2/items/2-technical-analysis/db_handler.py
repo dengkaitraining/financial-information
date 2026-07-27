@@ -3,13 +3,13 @@ import MySQLdb
 import numpy as np
 
 class DBHandler:
-    def __init__(self, host='127.0.0.1', user='root', password='your_password', database='stock_db'):
+    def __init__(self, host='127.0.0.1', user='root', password='your_password', db='stock_db'):
         # ⚠️ 請將 password 替換為您的 MariaDB 密碼
         self.config = {
             'host': host,
             'user': user,
             'password': password,
-            'database': database,
+            'database': db,
             'charset': 'utf8mb4'
         }
 
@@ -17,7 +17,7 @@ class DBHandler:
         """建立並回傳資料庫連線"""
         return MySQLdb.connect(**self.config)
 
-    def save_ta_data(self, symbol, df):
+    def save_ta_data(self, stock_id, df):
         """寫入技術分析資料，遇到重複主鍵則更新"""
         if df is None or df.empty:
             return False, "沒有抓取到技術分析資料，取消寫入。"
@@ -30,7 +30,7 @@ class DBHandler:
 
         sql = """
             INSERT INTO technical_analysis (
-                symbol, trade_date, volume, open_price, high_price, low_price, close_price,
+                stock_id, trade_date, volume, open_price, high_price, low_price, close_price,
                 k_value, d_value, j_value, macd, macd_signal, bias, williams_r, bbi,
                 cdp, ah, nh, nl, al, pdi, mdi, adx
             ) VALUES (
@@ -48,7 +48,7 @@ class DBHandler:
         data_tuples = []
         for _, row in df.iterrows():
             data_tuples.append((
-                symbol, row['Date'], row['Volume'], row['Open'], row['High'], row['Low'], row['Close'],
+                stock_id, row['Date'], row['Volume'], row['Open'], row['High'], row['Low'], row['Close'],
                 row['K'], row['D'], row['J'], row['MACD'], row['MACD_Signal'], row['BIAS'], 
                 row['Williams_R'], row['BBI'], row['CDP'], row['AH'], row['NH'], row['NL'], 
                 row['AL'], row['PDI'], row['MDI'], row['ADX']

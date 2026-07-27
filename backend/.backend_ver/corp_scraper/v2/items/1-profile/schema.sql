@@ -6,7 +6,7 @@ USE stock_db;
 
 -- 1. 公司基本資料表 (company_profile)
 CREATE TABLE IF NOT EXISTS company_profile (
-    symbol VARCHAR(20) NOT NULL COMMENT '股票代碼',
+    stock_id VARCHAR(20) NOT NULL COMMENT '股票代碼',
     tax_id VARCHAR(20) DEFAULT NULL COMMENT '統一編號',
     company_name VARCHAR(100) NOT NULL COMMENT '公司名稱',
     spokesperson VARCHAR(50) DEFAULT NULL COMMENT '發言人',
@@ -33,26 +33,26 @@ CREATE TABLE IF NOT EXISTS company_profile (
     main_business TEXT DEFAULT NULL COMMENT '主要經營業務',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (symbol)
+    PRIMARY KEY (stock_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='公司基本資料表';
 
 -- 2. 公司行事曆資料表 (company_calendar)
 CREATE TABLE IF NOT EXISTS company_calendar (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    symbol VARCHAR(20) NOT NULL COMMENT '股票代碼',
+    stock_id VARCHAR(20) NOT NULL COMMENT '股票代碼',
     event_type VARCHAR(50) NOT NULL COMMENT '事件類型(股東常會/配股發放日/現金股利發放日)',
     event_date DATE NOT NULL COMMENT '事件日期',
     description TEXT DEFAULT NULL COMMENT '補充說明',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT uk_symbol_event UNIQUE (symbol, event_type, event_date),
-    FOREIGN KEY (symbol) REFERENCES company_profile(symbol) ON DELETE CASCADE ON UPDATE CASCADE
+    CONSTRAINT uk_stock_id_event UNIQUE (stock_id, event_type, event_date),
+    FOREIGN KEY (stock_id) REFERENCES company_profile(stock_id) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='公司行事曆資料表';
 
 -- 3. 公司新聞與個股公告資料表 (company_news)
 CREATE TABLE IF NOT EXISTS company_news (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    symbol VARCHAR(20) NOT NULL COMMENT '股票代碼',
+    stock_id VARCHAR(20) NOT NULL COMMENT '股票代碼',
     news_type VARCHAR(100) NOT NULL COMMENT '類型(NEWS:新聞 / ANNOUNCEMENT:個股公告)',
     title TEXT NOT NULL COMMENT '新聞/公告標題',
     url TEXT NOT NULL COMMENT '新聞連結 URL',
@@ -61,8 +61,8 @@ CREATE TABLE IF NOT EXISTS company_news (
     summary LONGTEXT DEFAULT NULL COMMENT '內文摘要',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT uk_symbol_url UNIQUE (symbol, url),
-    FOREIGN KEY (symbol) REFERENCES company_profile(symbol) ON DELETE CASCADE ON UPDATE CASCADE
+    CONSTRAINT uk_stock_id_url UNIQUE (stock_id, url),
+    FOREIGN KEY (stock_id) REFERENCES company_profile(stock_id) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='公司新聞與個股公告表';
 
 
