@@ -91,6 +91,51 @@ services:
           - backend
 
   # ----------------------------------------------------------------------------
+  # 3a. Celery Worker 服務: 執行非同步與排程任務
+  # ----------------------------------------------------------------------------
+  fin-celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fin_celery_worker
+    restart: always
+    volumes:
+      - ./backend:/app
+    env_file:
+      - .env
+    command: [ "celery", "-A", "core", "worker", "--loglevel=info" ]
+    depends_on:
+      - fin-db
+      - fin-redis
+    networks:
+      fin-django-net:
+        aliases:
+          - celery-worker
+
+  # ----------------------------------------------------------------------------
+  # 3b. Celery Beat 服務: 任務排程發送器
+  # ----------------------------------------------------------------------------
+  fin-celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fin_celery_beat
+    restart: always
+    volumes:
+      - ./backend:/app
+    env_file:
+      - .env
+    command: [ "celery", "-A", "core", "beat", "-l", "info", "--scheduler", "django_celery_beat.schedulers:DatabaseScheduler" ]
+    depends_on:
+      - fin-db
+      - fin-redis
+    networks:
+      fin-django-net:
+        aliases:
+          - celery-beat
+
+
+  # ----------------------------------------------------------------------------
   # 4. 資料庫伺服器: MariaDB 12.3 (多資料庫與多帳號管理)
   # ----------------------------------------------------------------------------
   fin-db:

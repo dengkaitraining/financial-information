@@ -34,6 +34,9 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
+    # 定時排程定時器元件
+    'django_celery_beat',
+
     # 本地專案應用模組
     'core',
     'employees',
@@ -149,3 +152,12 @@ UNFOLD = {
         "show_all_applications": True,
     },
 }
+
+# ------------------------------------------------------------------------------
+# 5. Celery 定時與非同步任務設定
+# ------------------------------------------------------------------------------
+CELERY_BROKER_URL = f"redis://{os.environ.get('REDIS_HOST', 'redis')}:{os.environ.get('REDIS_PORT', '6379')}/0"
+CELERY_RESULT_BACKEND = f"redis://{os.environ.get('REDIS_HOST', 'redis')}:{os.environ.get('REDIS_PORT', '6379')}/0"
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+

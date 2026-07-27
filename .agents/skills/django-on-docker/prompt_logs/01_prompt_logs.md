@@ -304,4 +304,26 @@ description: 提供基於 Docker Compose 容器化技術之 Python Django 5.2 LT
    (6) 完成後的檢查 (Final inspection)：檢查作業細部資訊，以 markdown 檔案儲存在 .agents/skills/django-on-docker/inspections/ 的資料夾內。
  </skill>
 
- 
+------
+2026-07-27 14:48
+# 依據<spec>需求項目建立搜尋、儲存、排程「公司基本資料 profile 資料」單元，程式架構請參考<ref>。
+<spec>
+  1. 公司基本資料 profile 資料包含：
+     - 公司資料：(股票代碼、統一編號、公司名稱、發言人、英文簡稱、代理發言人、成立時間、總機電話、掛牌日期、傳真號碼、產業類別、公司網站、董事長、電子郵件、總經理、股務代理、股本、簽證會計師、已發行普通股數、公司地址、市值 (百萬)、市場別、董監持股比例(%)、所屬集團、主要經營業務)
+     - 行事曆：股東常會、配股發放日、現金股利發放日
+     - 新聞：近 100 筆相關新聞、近 100 筆個股公告
+  2. 透過搜尋股票代碼，建立手動更新「公司基本資料 profile 資料」的功能，更新<ref>內schema.sql表單資料。並且搜尋過股票代碼資訊另外建立一表單將其加入排程更新的清單。
+  3. 將「2.」的更新功能，套用 Django Celery Beat 元件，在 Django unfold 後台使用圖形化介面新增、修改或刪除 Crontab 定時任務；並 Django Unfold 後台增加資料庫表單管理功能：資料新增、修改、刪除。
+  4. 系統前台以戰情資訊室(dashboard)建立公司基本資料 profile 資料頁面，包含：公司資料、行事曆(近10筆資料)、新聞(近10筆資料)。行事曆、新聞附加 more 的按鍵另外開啟分頁列出全部資訊。
+  5. 將建立的資料庫表單加入 Django 框架資料庫 migration 功能。
+  6. 功能建立完成後，需要完成單元測試與項目完成報告。
+</spec>
+<ref>
+ 參考 backend/.backend_ver/corp_scraper/v2/items/1-profile 資料夾內文件：
+ 1. 建立公司基本資料 profile 資料抓取單元的prompt：1-profile-prompt.md
+ 2. 資料庫表單建立規則：schema.sql
+ 3. 公司基本資料 profile 資料抓取單元：fetcher.py
+ 4. 表單資料連線與新增更新函式：db.py
+ 5. 手動測試單元：cli.py
+ 6. 英文翻譯單元：translator.py
+</ref>

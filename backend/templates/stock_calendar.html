@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ profile.company_name }} ({{ profile.stock_id }}) - 完整行事曆 | 戰情資訊室</title>
+    <!-- 載入 Tailwind CSS 3.4.15 (或最新CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#070b13',
+                        glassBg: 'rgba(15, 23, 42, 0.65)',
+                        glassBorder: 'rgba(51, 65, 85, 0.5)',
+                        neonCyan: '#00f2fe',
+                        neonBlue: '#4facfe',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .glassmorphism {
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(51, 65, 85, 0.4);
+        }
+        body {
+            background-color: #070b13;
+            background-image: 
+                radial-gradient(at 10% 10%, rgba(14, 116, 144, 0.08) 0px, transparent 50%),
+                radial-gradient(at 90% 90%, rgba(30, 58, 138, 0.08) 0px, transparent 50%);
+        }
+    </style>
+</head>
+<body class="text-slate-100 min-h-screen flex flex-col justify-between selection:bg-cyan-500 selection:text-darkBg">
+
+    <div class="w-full max-w-6xl mx-auto px-6 py-10 flex-grow">
+        
+        <!-- 頁頭導覽 -->
+        <header class="flex flex-col md:flex-row md:items-center md:justify-between mb-10 pb-6 border-b border-slate-800/80">
+            <div class="flex items-center space-x-4 mb-4 md:mb-0">
+                <div class="h-12 w-12 rounded-xl bg-gradient-to-tr from-blue-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-cyan-950/40">
+                    <svg class="h-6 w-6 text-darkBg font-bold" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white via-cyan-100 to-blue-400 bg-clip-text text-transparent">
+                        {{ profile.company_name }} ({{ profile.stock_id }})
+                    </h1>
+                    <p class="text-sm text-cyan-400 font-medium tracking-wide mt-0.5">
+                        市場別：{{ profile.market_type | default:"台股" }} • 完整行事曆事件清單
+                    </p>
+                </div>
+            </div>
+            <button onclick="window.close()" class="px-5 py-2.5 bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 hover:border-slate-600 rounded-xl text-sm font-semibold tracking-wide text-slate-300 hover:text-white transition-all duration-300 shadow-sm flex items-center space-x-2">
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                <span>關閉分頁</span>
+            </button>
+        </header>
+
+        <!-- 行事曆內容 -->
+        <main class="glassmorphism rounded-2xl p-8 shadow-xl shadow-black/20">
+            <h2 class="text-xl font-bold mb-6 text-slate-200 flex items-center space-x-2">
+                <span class="h-4 w-1.5 bg-cyan-400 rounded-full"></span>
+                <span>所有行事曆項目 (共 {{ calendars|length }} 筆)</span>
+            </h2>
+
+            {% if calendars %}
+            <div class="overflow-x-auto rounded-xl border border-slate-800/80">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-900/80 text-cyan-400 text-sm font-semibold border-b border-slate-800">
+                            <th class="py-4 px-6">事件日期</th>
+                            <th class="py-4 px-6">事件類型</th>
+                            <th class="py-4 px-6">補充說明</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/60">
+                        {% for event in calendars %}
+                        <tr class="hover:bg-slate-900/30 transition-colors duration-200">
+                            <td class="py-4 px-6 font-mono text-cyan-300 font-medium">{{ event.event_date|date:"Y-m-d" }}</td>
+                            <td class="py-4 px-6">
+                                <span class="px-3 py-1 text-xs font-bold rounded-full 
+                                    {% if event.event_type == '股東常會' %}bg-purple-950/50 text-purple-300 border border-purple-800/50
+                                    {% elif event.event_type == '配股發放日' %}bg-amber-950/50 text-amber-300 border border-amber-800/50
+                                    {% elif event.event_type == '現金股利發放日' %}bg-emerald-950/50 text-emerald-300 border border-emerald-800/50
+                                    {% else %}bg-slate-850/50 text-slate-300 border border-slate-700/50{% endif %}">
+                                    {{ event.event_type }}
+                                </span>
+                            </td>
+                            <td class="py-4 px-6 text-slate-300 text-sm">{{ event.description|default:"-" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-16 text-slate-500">
+                <svg class="h-12 w-12 mx-auto mb-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <p class="text-base font-medium">資料庫內尚無該股票的行事曆資料</p>
+                <p class="text-xs text-slate-600 mt-1">您可以回到前台點選「即時更新並儲存」以重新爬取資料</p>
+            </div>
+            {% endif %}
+        </main>
+    </div>
+
+    <!-- 頁尾 -->
+    <footer class="w-full text-center text-xs text-slate-600 py-6 border-t border-slate-900/60 bg-darkBg/80 backdrop-blur-md">
+        <p>© 2026 Django 5.2 + Vue 3.5 + Tailwind CSS v4.3 Containerization Stack</p>
+    </footer>
+
+</body>
+</html>

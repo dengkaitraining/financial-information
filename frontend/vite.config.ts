@@ -16,10 +16,7 @@ export default defineConfig({
   server: {
     host: '0.0.0.0', // 監聽所有網路介面以利 Docker 存取
     port: 5173,
-    hmr: {
-      path: '/tech-stack/_hmr', // 設定熱模組替換 WebSocket 轉接路徑
-      clientPort: 80           // 指定 Client 端的 WebSocket 連線對外 Port (透過 Apache Port 80)
-    },
+    hmr: false,
     watch: {
       usePolling: true // 開啟輪詢模式，確保 Windows 掛載磁碟時能即時感應檔案修改
     }

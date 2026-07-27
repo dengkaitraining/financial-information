@@ -62,3 +62,8 @@ googletrans==4.0.0-rc1
 
 # html5lib
 html5lib
+
+# Celery and Django Celery Beat for task scheduling
+celery
+django-celery-beat
+
