@@ -14,9 +14,9 @@ description: 提供基於 Docker Compose 容器化技術之 Python Django 5.2 LT
 | :--- | :--- | :--- | :--- |
 | **`init-dir`** | Alpine Linux + Shell | 目錄建立與 Host OS 自動權限修復 | 容器編排優先執行，修復完成即退出 |
 | **`web`** | Apache HTTPD 2.4-alpine | 反向代理網頁伺服器，統一 Port 80 進入點，分流路由 | 處理 `/profile/`, `/tech-stack/`, `/`, `/admin/`, `/api/` |
-| **`backend`** | Python 3.12 + Django 5.2 LTS | 後端網頁框架、Unfold 美觀後台、REST API 與單元測試 | 提供健康 API、股票更新 API 與 10 項單元測試 |
-| **`celery-worker`**| Celery 5.6.3 | 背景非同步任務執行器。負責 yfinance / GNews 爬取與落庫。 | 異步執行耗時爬蟲與資料翻譯處理 |
-| **`celery-beat`**  | django-celery-beat 2.6.0 | 定期排程調度器。基於後台配置定期觸發排程。 | Unfold 後台圖形化管理與定時觸發 |
+| **`backend`** | Python 3.12 + Django 5.2 LTS | 後端網頁框架、Unfold 美觀後台、REST API 與單元測試 | 提供健康 API、股票更新 API 與單元測試 |
+| **`celery-worker`**| Celery 5.6.3 | 背景非同步任務執行器。負責 yfinance / GNews 爬取、翻譯與技術分析落庫。 | 異步執行耗時爬蟲與資料翻譯處理 |
+| **`celery-beat`**  | django-celery-beat 2.6.0 | 定期排程調度器。配合 Unfold 設定，每 4 小時自動執行更新任務。 | Unfold 後台圖形化管理與定時觸發 |
 | **`backend_ver`** | Python 3.12 + 軟連結與隱藏資料夾 | 後端程式手動測試驗證環境，藉由 `SHOW_BACKEND_VER` 參數控制顯示與隱蔽 | 開發測試環境（`True`）下進入 `fin_django_backend` 執行 `python backend_ver/run_all.py` |
 | **`frontend_ver`** | Node/JS + 軟連結與隱藏資料夾 | 前端環境手動測試驗證環境，藉由 `SHOW_FRONTEND_VER` 參數控制顯示與隱蔽 | 開發測試環境（`True`）下進入 `fin_vue_frontend` 執行 `node frontend_ver/run_all.js` |
 | **`frontend`** | Vue 3.5 + TS + Tailwind v4.3 | 前端 SPA 開發伺服器 (Vite base: `/tech-stack/`, hmr: `false`) | 造訪 `http://localhost/tech-stack/` 監控或 `http://localhost/profile/` 戰情室 |
@@ -31,6 +31,14 @@ description: 提供基於 Docker Compose 容器化技術之 Python Django 5.2 LT
 * **資料庫遷移版控**：所有新 Model 定義必須完全併入 Django migrations（`makemigrations` 與 `migrate`），禁止使用手動原生 SQL 建表，保障 MariaDB Schema 資料庫版本控制一致性。
 * **HMR 相容性與重刷消除**：反向代理下若存在 Base URL 與頁面網址不匹配，需將 `vite.config.ts` 中的 `server.hmr` 設為 `false` 停用熱重載，以杜絕 HMR WebSocket 斷線引起之無限重新整理 (Infinite Page Refresh) 循環。
 * **日期與資料清洗**：在爬蟲寫入資料庫前，必須對上市日期、成立日期等字串進行格式清洗（將 `YYYY/MM/DD` 斜線格式自動置換為 `YYYY-MM-DD` 橫線格式），以完全相容 Django DateField。
+* **時區完全台灣時間化 (UTC+8)**：
+  - 容器系統時區 (TZ) 配置 `Asia/Taipei`，Celery 設定 `CELERY_ENABLE_UTC = False`，新聞發布時間轉為台北時間，前台 views 使用 `timezone.localtime` 輸出。
+* **防封鎖休眠間隔規範**：
+  - Scraper 內部的每一個網路擷取方法（Profile、Calendar、News）後面必須停留 5 秒延遲。
+  - Celery Beat 定期排程更新時，每個個股更新循環末尾必須 sleep 10 秒。
+* **落庫狀態完整校驗防止渲染 Race Condition**：
+  - 輪詢 API 不得以單純 profile 存在判斷 boolean，必須引入 `profile` 和 `TechnicalAnalysis` 的存在性聯合校驗。
+  - 前端輪詢成功後必須主動發起一次純查詢（再次抓取）以解決 TA 資料落庫差造成的圖表無法顯示痛點。
 * 準則細部資訊與規範說明，請參閱相對路徑文件：
   [rules_detail.md](./rules/rules_detail.md)
 

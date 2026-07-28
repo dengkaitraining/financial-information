@@ -18,9 +18,24 @@
 - [x] **6. 實作前端戰情室 Dashboard ECharts 圖表 (Vue 3.5)**
   - [x] 修改 `frontend/package.json` 加入 `echarts` 依賴並執行 `npm install`
   - [x] 修改 `frontend/src/App.vue` 建立「技術分析圖表」分頁，使用 Apache ECharts 繪製 K線 + CDP, 成交量, KD, MACD, BIAS 等共享 X 軸縮放圖表
-- [x] **7. 驗證與測試**
+- [x] **7. 系統與抓取時間對齊 UTC+8 台灣時間**
+  - [x] 為 Python/Celery 容器加載 `TZ=Asia/Taipei` 系統時區變數
+  - [x] settings.py 中配置 `CELERY_ENABLE_UTC = False` 與台北時區
+  - [x] scraper 內部的 GNews 新聞 RSS 發布時間轉為台北時區寫入
+  - [x] views.py 返回新聞公告時以 `timezone.localtime` 轉成本地時間
+- [x] **8. Scraper 爬蟲重構搬移**
+  - [x] 將 `fetcher.py` 與 `translator.py` 從 `core/scraper/` 移入 `stock_db/scraper/`
+  - [x] 清理 core app 舊檔案，更新 `core/tasks.py` 內部的模組引用
+- [x] **9. DataTables 分頁與 12pt 最小字體強制限制**
+  - [x] 完整行事曆與新聞 MORE 分頁引入 DataTables 分頁與搜尋
+  - [x] 對 DataTables 控制項加載霓虹深色樣式與 CSS 自適應
+  - [x] 前端 UI (App.vue 與 MORE 分頁) 字體大小強制限制最小為 12pt (16px)
+- [x] **10. 防封鎖延遲與 Race Condition 解決**
+  - [x] 爬蟲各抓取方法加載 5 秒延遲，排程任務股票抓取間隔設為 10 秒，定期排程改為每 4 小時
+  - [x] views.py 採用 `profile` 與 `has_ta` 聯合檢測以防止輪詢提前結束
+  - [x] 前端輪詢成功後，自動再次發起一輪純查詢（再次抓取）以解決 ECharts 無法渲染的 Race Condition
+- [x] **11. 驗證與測試**
   - [x] 於 `stock_db/tests.py` 實作單元測試
   - [x] 執行測試命令，確保 100% 通過
-  - [x] 手動驗證前台與後台功能是否正常運作
-- [x] **8. 撰寫 Walkthrough 報告**
-  - [x] 建立 `walkthrough.md` 說明變更與測試結果
+- [x] **12. 撰寫 Walkthrough 報告**
+  - [x] 建立並更新 `walkthrough.md` 及專案內文檔說明變更與測試結果
