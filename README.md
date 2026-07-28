@@ -52,11 +52,13 @@
 3. **自動初始化目錄與權限修復服務 (`init-dir`)**：
    - Docker Compose 第一優先啟動 `init-dir` 服務 (`scripts/init_dir.sh`)，依據 Host OS 判斷自動建立並修復 `./db_data` 與 `./redis_data` 實體目錄權限。
 4. **宿主機實體目錄掛載 (`./db_data`)**：
-   - `django_db` 服務資料儲存目錄嚴格指向專案內實體路徑 `./db_data:/var/lib/mysql`。
+   - `django_db` 服務資料儲存目錄嚴格指向專案內實體 path `./db_data:/var/lib/mysql`。
 5. **宿主機 OS 自動判斷 (`entrypoint.sh`)**：
    - 容器啟動時會自動判斷 Windows (WSL2)、macOS (LinuxKit) 或 Native Linux 宿主機環境，並調整 ORM Schema 遷移與檔案適配模式。支援自定義 command 傳入以配合 Celery 容器執行背景服務。
 6. **時區與時間本地化 (Asia/Taipei)**：
    - 所有 Python/Celery 容器皆掛載 `TZ=Asia/Taipei` 系統時區，Celery 設定 `CELERY_ENABLE_UTC = False`，新聞 GNews 爬取與 API 回傳全面使用台北時間，避免時區落差。
+7. **外部 IP 連線開放 (0.0.0.0)**：
+   - 在 `.env` 的 `DJANGO_ALLOWED_HOSTS` 中配置了 `*` 通配符，開放系統供外部 IP 連線，並由 Apache 反向代理安全分流至各 Docker 內部端點。
 
 ---
 
@@ -152,7 +154,7 @@ EMPLOYEE_DB_PASSWORD=user_employee_pass
 
 # Django 設定與超級管理員
 DJANGO_DEBUG=True
-DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,web
+DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,web,backend,fin-backend,*
 DJANGO_SUPERUSER_USERNAME=admin
 DJANGO_SUPERUSER_PASSWORD=adminpassword123
 # 顯示後端手動測試驗證資料的控制開關 (True: 測試開發環境顯示 / False: 正式上線隱蔽)
@@ -176,7 +178,7 @@ SHOW_BACKEND_VER=True
 # 1. 統一跨平台進入點 (Linux, macOS, Git Bash, WSL)
 ./scripts/deploy.sh
 
-# 2. 執行 Django 5.2 後端與台股資料單元測試 (10 項測試)
+# 2. 執行 Django 5.2 後端與台股資料單元測試 (4 項測試)
 docker compose exec fin-backend python manage.py test stock_db
 
 # 3. 執行線上服務健康檢測
@@ -189,39 +191,39 @@ docker compose exec fin-backend python manage.py test stock_db
 
 ```text
 .
-├── .env                              # 全局環境變數 (含 user_stock & user_employee 憑證)
+├── .env                              # 全局環境變數 (開啟外部 IP 存取)
 ├── .gitattributes                    # 強制 LF 換行規範 (跨平台支援)
-├── .gitignore                        # Git 忽略檔規範 (已排除手動測試軟連結與 gnews 產出目錄)
+├── .gitignore                        # Git 忽略檔規範
 ├── enter_dc.sh                       # 快速進入 Docker 容器之互動式輔助腳本
-├── docker-compose.yaml               # 8 大容器服務編排檔 (新增 celery-worker 與 celery-beat 服務，配置 TZ 台灣時區)
+├── docker-compose.yaml               # 8 大容器服務編排檔 (配置 TZ 台灣時區)
 ├── README.md                         # 專案詳細說明文件檔
 ├── scripts/
 │   ├── init_dir.sh                  # 自動初始化目錄與跨 OS 權限修復腳本 (init-dir)
-│   ├── deploy.sh                     # 統一跨平台進入點 (Linux, macOS, Git Bash, WSL)
-│   ├── deploy_linux.sh              # Linux 平台專用部署與單元測試腳本 (Ubuntu / Debian / RHEL)
-│   ├── deploy_mac.sh                # macOS 平台專用部署與單元測試腳本 (Apple Silicon / Intel)
-│   ├── deploy_windows.ps1            # Windows 平台專用部署與單元測試腳本 (PowerShell)
-│   └── test_health.sh                # 線上服務健康測試腳本
+│   ├── deploy.sh                     # 統一跨平台進入點
+│   ├── deploy_linux.sh              # Linux 原生 Docker 部署
+│   ├── deploy_mac.sh                # macOS 部署與測試
+│   ├── deploy_windows.ps1            # Windows PowerShell 部署適配
+│   └── test_health.sh                # 線上服務健康測試
 ├── apache/
-│   └── httpd-custom.conf             # Apache HTTPD 反向代理自定義設定檔 (支援帶斜線與無斜線 /profile 路由轉接)
+│   └── httpd-custom.conf             # Apache HTTPD 反向代理自定義設定檔 (支援無斜線 URL 轉發)
 ├── db_conf/
-│   ├── my_custom.cnf                 # MariaDB 參數調校 (innodb_file_per_table=0 NTFS/APFS 相容)
-│   └── init_multi_db.sql             # 雙資料庫 (user_stock_db, db_employee) 初始化腳本
+│   ├── my_custom.cnf                 # MariaDB 參數調校
+│   └── init_multi_db.sql             # 雙資料庫初始化
 ├── backend/                          # Django 5.2 後端應用程式
 │   ├── Dockerfile
-│   ├── entrypoint.sh                 # 自動判斷 Host OS，自動初始化超級管理員與 Celery Beat 排程任務
+│   ├── entrypoint.sh                 # 自動初始化超級管理員與 Celery Beat 每 4 小時更新任務
 │   ├── core/
-│   │   ├── celery.py                 # Celery app 初始化與組態配置
-│   │   ├── tasks.py                  # 2 個台股 Scraper 背景/定時排程任務，支援 10 秒個股更新間隔
-│   │   ├── db_router.py              # 多資料庫路由轉接器 (PrimaryEmployeeRouter)
-│   │   ├── settings.py               # 多 DB 設定與 Unfold 配置、Celery Redis 連線配置 (關閉 UTC 強制時間)
-│   │   ├── views.py                  # 台股查詢 API 與行事曆/新聞詳情分頁之 URL 路由 (雙重 has_ta 防止輪詢 Race Condition)
-│   │   └── urls.py                   # 新增台股查詢 API 與行事曆/新聞詳情分頁之 URL 路由
+│   │   ├── celery.py                 # Celery app 初始化
+│   │   ├── tasks.py                  # 2 個台股 Scraper 任務，支援 10 秒個股間隔與 4 小時週期
+│   │   ├── db_router.py              # 多資料庫路由轉接器
+│   │   ├── settings.py               # 多 DB 設定與 Celery (關閉 UTC 時區強制)
+│   │   ├── views.py                  # 股票查詢與載入 API (雙重 has_ta 聯鎖防護)
+│   │   └── urls.py                   # 後端 URL 路由
 │   ├── templates/                    # 新增 HTML 詳情分頁渲染模板
-│   │   ├── stock_calendar.html       # 更多行事曆精美深色風 HTML 模板 (搭載 DataTables 分頁與 12pt 字體強制限制)
-│   │   └── stock_news.html           # 更多新聞公告精美深色風 HTML 模板 (搭載 DataTables 分頁與 12pt 字體強制限制)
+│   │   ├── stock_calendar.html       # 行事曆 Datatable 分頁與 12pt 字體限制
+│   │   └── stock_news.html           # 新聞公告雙頁籤 (Tabs) Datatable 分頁與 12pt 字體限制
 │   ├── employees/                    # 員工管理模組
-│   └── stock_db/                     # 台股資料處理專屬應用模組 [NEW]
+│   └── stock_db/                     # 台股資料處理專屬應用模組
 │       ├── models.py                 # CompanyProfile, CompanyCalendar, CompanyNews, TechnicalAnalysis 等模型
 │       ├── admin.py                  # 註冊股票 Models 至 Unfold 管理介面
 │       ├── tests.py                  # 股票模組 4 項單元測試 (ORM 讀寫、唯一約束、防錯 Upsert 運算)
@@ -231,8 +233,8 @@ docker compose exec fin-backend python manage.py test stock_db
 │           └── db_django.py          # ORM 數據 upsert 落庫與斜線日期格式清洗
 ├── frontend/                         # Vue 3.5 前端應用程式
 │   ├── Dockerfile
-│   ├── vite.config.ts                # 將 hmr 設為 false 停用熱重載，徹底解決反向代理下重寫導致的無限刷新
-│   └── src/App.vue                   # 改造為分流呈現 UI，公司名旁附最新交易日收盤價看板，輪詢成功後主動重新載入 (Re-fetch)
+│   ├── vite.config.ts                # 禁用 HMR 解決 Apache 反向代理重寫無限刷新問題
+│   └── src/App.vue                   # 手機端響應式輸入框優化，Logo與動態 title (Financial Information)，180秒輪詢容錯
 ├── db_data/                          # MariaDB 12.3 實體目錄持久化區 (Git 忽略)
 └── redis_data/                       # Redis 8.8 實體目錄持久化區 (Git 忽略)
 ```
@@ -247,10 +249,10 @@ docker compose exec fin-backend python manage.py test stock_db
 | :--- | :--- | :--- | :--- |
 | **統一進入點部署** | `./scripts/deploy.sh` | 自動偵測系統、執行 Docker 構建與單元測試並驗證健康 API | **✓ 通過 (Exit 0)** |
 | **Django 單元測試** | `docker compose exec fin-backend python manage.py test stock_db` | 4 項單元測試 (技術分析模型、聯合約束、MariaDB 批次 upsert) 全數通過 | **✓ 通過 (Ran 4 tests OK)** |
-| **戰情室 URL 檢查** | [http://localhost/profile/](http://localhost/profile/) | 顯示靜態台股搜尋，點選後發起背景更新並順利落庫，輪詢完自動再次抓取渲染 ECharts | **✓ 通過 (200 OK)** |
+| **戰情室 URL 檢查** | [http://localhost/profile/](http://localhost/profile/) | 顯示靜態台股搜尋，手動輸入欄位具備手機端寬度防壓縮，輪詢結束自動二次拉取重繪 | **✓ 通過 (200 OK)** |
 | **健康檢測 URL 檢查**| [http://localhost/tech-stack/](http://localhost/tech-stack/) | 頁籤切換按鈕隱藏，首次載入自動檢測，爾後每 10 分鐘自動定時重新檢測與狀態更新 | **✓ 通過 (200 OK)** |
 | **自動化健康測試** | 執行 `./scripts/test_health.sh` | 終端機顯示 `🎉 所有自動化健康測試均完全通過!` | **✓ 通過 (Exit 0)** |
-| **Datatable 詳情分頁** | 點擊 `MORE +` 開啟詳情頁面 | 在獨立新分頁載入 DataTables，支援每頁顯示控制、搜尋與台灣時區日期呈現 | **✓ 通過 (200 OK)** |
+| **Datatable 詳情分頁** | 點擊 `MORE +` 開啟詳情頁面 | 在獨立新分頁載入 DataTables，新聞支援雙頁籤 (Tabs) 與獨立 DataTables 分頁 | **✓ 通過 (200 OK)** |
 
 ---
 
