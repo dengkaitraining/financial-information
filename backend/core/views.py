@@ -161,8 +161,13 @@ def stock_fetch_api(request):
         news_items = list(CompanyNews.objects.filter(stock=profile).order_by('-published_date')[:10].values(
             'news_type', 'title', 'url', 'publisher', 'published_date', 'summary'
         ))
+        from django.utils import timezone
         for n in news_items:
-            n['published_date'] = n['published_date'].strftime('%Y-%m-%d %H:%M:%S') if n['published_date'] else None
+            if n['published_date']:
+                local_dt = timezone.localtime(n['published_date'])
+                n['published_date'] = local_dt.strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                n['published_date'] = None
 
         # 擷取歷史技術分析資料 (依交易日期升序)
         from stock_db.models import TechnicalAnalysis

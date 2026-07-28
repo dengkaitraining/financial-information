@@ -1,5 +1,6 @@
 # ==============================================================================
-# 英文自動翻譯為繁體中文工具 (backend/core/scraper/translator.py)
+# 英文自動翻譯為繁體中文工具 (backend/stock_db/scraper/translator.py)
+# 說明：已搬移至 stock_db scraper 資料夾
 # ==============================================================================
 
 from deep_translator import GoogleTranslator

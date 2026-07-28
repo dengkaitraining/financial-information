@@ -1,9 +1,11 @@
 # ==============================================================================
-# 台股公司基本資料與新聞公告爬蟲 (backend/core/scraper/fetcher.py)
+# 台股公司基本資料與新聞公告爬蟲 (backend/stock_db/scraper/fetcher.py)
+# 說明：已搬移至 stock_db 並支援 UTC+8 台北時間解析
 # ==============================================================================
 
 import datetime
 import logging
+import zoneinfo
 from typing import Dict, List, Tuple
 from email.utils import parsedate_to_datetime
 import twstock
@@ -18,14 +20,16 @@ class StockProfileFetcher:
         self.gn = GNews(language='zh-TW', country='TW', max_results=100)
 
     def _parse_gnews_date(self, date_str: str) -> str:
-        """將 GNews 的時間字串轉換為 MariaDB DATETIME 格式 (YYYY-MM-DD HH:MM:SS)"""
+        """將 GNews 的時間字串轉換為 MariaDB DATETIME 格式 (轉換為 UTC+8 台灣時間)"""
         if not date_str:
             return None
         try:
             # 將 'Thu, 15 Aug 2024 07:00:00 GMT' 轉換為 datetime 物件
             dt_obj = parsedate_to_datetime(date_str)
+            # 轉換為台北時區 (UTC+8)
+            dt_taipei = dt_obj.astimezone(zoneinfo.ZoneInfo('Asia/Taipei'))
             # 格式化為資料庫支援的格式
-            return dt_obj.strftime('%Y-%m-%d %H:%M:%S')
+            return dt_taipei.strftime('%Y-%m-%d %H:%M:%S')
         except Exception as e:
             logging.warning(f"Date parse error for '{date_str}': {e}")
             return None
@@ -73,6 +77,9 @@ class StockProfileFetcher:
         shares = info.get('sharesOutstanding')
         tw_capital = round(float(shares) * 10, 2) if (shares is not None and (".TW" in yf_stock_id or ".TWO" in yf_stock_id)) else None
 
+        # 安全地讀取 'founded' 欄位，若不存在則回傳 None
+        founded_date = info.get("founded", None)
+
         profile = {
             'stock_id': stock_id,
             'tax_id': None,  # MOPS/公開資訊觀測站可補充，預設為 None
@@ -80,7 +87,7 @@ class StockProfileFetcher:
             'spokesperson': None,
             'eng_short_name': info.get('shortName'),
             'deputy_spokesperson': None,
-            'establishment_date': None,
+            'establishment_date': founded_date,
             'phone': info.get('phone'),
             'listing_date': tw_info.start if tw_info else None,
             'fax': info.get('fax'),

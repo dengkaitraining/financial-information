@@ -7,7 +7,7 @@ import logging
 import time
 from celery import shared_task
 from stock_db.models import StockScheduleList, CompanyProfile
-from core.scraper.fetcher import StockProfileFetcher
+from stock_db.scraper.fetcher import StockProfileFetcher
 from core.scraper.db_django import DjangoDatabaseManager
 from stock_db.scraper.ta_analyzer import TAAnalyzer
 

@@ -81,6 +81,8 @@ services:
       - ./backend:/app
     env_file:
       - .env
+    environment:
+      - TZ=Asia/Taipei
     command: [ "sh", "/app/entrypoint.sh" ]
     depends_on:
       - fin-db
@@ -103,6 +105,8 @@ services:
       - ./backend:/app
     env_file:
       - .env
+    environment:
+      - TZ=Asia/Taipei
     command: [ "celery", "-A", "core", "worker", "--loglevel=info" ]
     depends_on:
       - fin-db
@@ -125,6 +129,8 @@ services:
       - ./backend:/app
     env_file:
       - .env
+    environment:
+      - TZ=Asia/Taipei
     command: [ "celery", "-A", "core", "beat", "-l", "info", "--scheduler", "django_celery_beat.schedulers:DatabaseScheduler" ]
     depends_on:
       - fin-db

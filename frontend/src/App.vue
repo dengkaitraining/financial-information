@@ -3,7 +3,7 @@
 <!-- 說明：資訊系統開發環境與台股戰情室儀表板                                   -->
 <!-- ======================================================================= -->
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick, computed } from 'vue'
 import * as echarts from 'echarts'
 
 /**
@@ -516,6 +516,32 @@ watch([activeSubTab, selectedIndicator, stockData], async () => {
   }
 })
 
+// 計算最新交易日的收盤股價與漲跌幅
+const latestStockInfo = computed(() => {
+  const ta = stockData.value?.technical_analysis
+  if (!ta || ta.length === 0) return null
+  
+  const len = ta.length
+  const latest = ta[len - 1]
+  if (latest.close_price === null || latest.close_price === undefined) return null
+  
+  const prev = len >= 2 ? ta[len - 2] : null
+  const price = latest.close_price
+  
+  let change = 0
+  let changePercent = 0
+  if (prev && prev.close_price !== null && prev.close_price !== undefined && prev.close_price > 0) {
+    change = price - prev.close_price
+    changePercent = (change / prev.close_price) * 100
+  }
+  
+  return {
+    price,
+    change,
+    changePercent
+  }
+})
+
 // 監聽視窗大小調整以自適應 ECharts 佈局
 const handleResize = () => {
   if (myChart) {
@@ -710,9 +736,20 @@ onUnmounted(() => {
               
               <div class="flex flex-col md:flex-row md:items-center md:justify-between border-b border-slate-800/80 pb-4 mb-6">
                 <div>
-                  <h2 class="text-2xl font-black text-slate-100 flex items-center space-x-2">
+                  <h2 class="text-2xl font-black text-slate-100 flex flex-wrap items-center gap-3">
                     <span>{{ stockData.profile.company_name }}</span>
                     <span class="text-lg text-slate-400 font-mono">({{ stockData.profile.stock_id }})</span>
+                    
+                    <!-- 股價與漲跌幅資訊 -->
+                    <span v-if="latestStockInfo" class="flex items-center gap-2 bg-slate-950/90 px-3 py-1 rounded-xl border border-slate-900 text-base">
+                      <span class="text-slate-400">收盤價</span>
+                      <span :class="latestStockInfo.change >= 0 ? 'text-rose-400' : 'text-emerald-400'" class="font-mono font-extrabold text-xl">
+                        {{ latestStockInfo.price.toFixed(2) }}
+                      </span>
+                      <span :class="latestStockInfo.change >= 0 ? 'text-rose-400' : 'text-emerald-400'" class="font-mono font-bold">
+                        {{ latestStockInfo.change >= 0 ? '▲' : '▼' }} {{ Math.abs(latestStockInfo.change).toFixed(2) }} ({{ latestStockInfo.change >= 0 ? '+' : '' }}{{ latestStockInfo.changePercent.toFixed(2) }}%)
+                      </span>
+                    </span>
                   </h2>
                   <p class="text-xs text-slate-400 mt-1">
                     英文簡稱: {{ stockData.profile.eng_short_name || '-' }} • 統一編號: {{ stockData.profile.tax_id || '-' }}
@@ -1089,5 +1126,13 @@ onUnmounted(() => {
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+/* 強制所有 Tailwind 小字體類別最小不小於 12pt (16px) */
+.text-xs,
+.text-sm,
+.text-\[10px\],
+.text-\[11px\] {
+  font-size: 12pt !important;
 }
 </style>
