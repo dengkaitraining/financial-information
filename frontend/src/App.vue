@@ -121,14 +121,27 @@ if (typeof window !== 'undefined') {
   if (path.includes('/profile')) {
     activeTab.value = 'dashboard'
     showTabs.value = false
+    document.title = 'Financial Information'
   } else if (path.includes('/tech-stack')) {
     activeTab.value = 'health'
     showTabs.value = false
+    document.title = 'System Health Monitor'
   } else {
     // 若無特殊路徑則同時顯示 Tab (相容預設)
     showTabs.value = true
   }
 }
+
+// 監聽 activeTab 變更以響應式更新瀏覽器網頁標題
+watch(activeTab, (newTab) => {
+  if (typeof window !== 'undefined') {
+    if (newTab === 'dashboard') {
+      document.title = 'Financial Information'
+    } else {
+      document.title = 'System Health Monitor'
+    }
+  }
+}, { immediate: true })
 
 // Tab 1: 健康狀態監控響應式變數
 const healthLoading = ref(false)
@@ -202,17 +215,17 @@ const handleStockSearch = async (updateMode: boolean = false) => {
 
     if (updateMode && data.task_started) {
       // 進入背景非同步輪詢模式，每 3 秒檢查一次資料是否完成寫入
-      dashboardSuccessMsg.value = '已啟動背景資料擷取與翻譯排程，大約需要 3 - 5 秒，系統正自動為您同步數據...'
+      dashboardSuccessMsg.value = '已啟動背景資料擷取與翻譯排程，首次抓取由於涉及大批量歷史數據分析約需 15 - 45 秒，系統正為您同步數據...'
       
       let attempts = 0
       pollIntervalId = setInterval(async () => {
         attempts++
-        if (attempts > 30) {
-          // 超過 90 秒停止輪詢，避免連線無限拉長
+        if (attempts > 60) {
+          // 超過 180 秒 (3 分鐘) 停止輪詢，避免連線無限拉長
           clearInterval(pollIntervalId!)
           pollIntervalId = null
           dashboardLoading.value = false
-          dashboardError.value = '更新逾時，外部伺服器連線遲緩，請稍後再試。'
+          dashboardError.value = '首次資料背景更新較慢，定時輪詢已停止。請於 30 秒後點擊「搜尋」以載入已完成計算的數據！'
           return
         }
 
@@ -592,7 +605,10 @@ onUnmounted(() => {
               <path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
             </svg>
           </div>
-          <div>
+          <div v-if="activeTab === 'dashboard'" class="flex items-center">
+            <span class="text-xl font-extrabold tracking-tight bg-gradient-to-r from-white via-cyan-100 to-blue-400 bg-clip-text text-transparent">Financial Information</span>
+          </div>
+          <div v-else>
             <span class="text-base font-black tracking-wider bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent">FINANCIAL</span>
             <span class="text-xs font-bold text-cyan-400 block tracking-widest leading-none mt-0.5">CONTAINER STACK</span>
           </div>
@@ -643,8 +659,8 @@ onUnmounted(() => {
         <div class="glassmorphism rounded-2xl p-6 shadow-2xl border border-slate-900/50">
           <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             
-            <!-- 搜尋輸入框與控制 -->
-            <div class="flex items-center space-x-2.5 max-w-lg w-full">
+            <!-- 搜尋輸入框與控制 (加載手機端響應式排版，防止輸入框被壓縮) -->
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 max-w-xl w-full">
               <div class="relative flex-grow">
                 <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                   <svg class="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -656,27 +672,29 @@ onUnmounted(() => {
                   v-model="searchStockId" 
                   @keyup.enter="handleStockSearch(false)"
                   placeholder="請輸入台灣股市代碼 (例如: 2330, 2454)" 
-                  class="w-full bg-slate-950/80 border border-slate-800 hover:border-slate-700 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 rounded-xl py-2.5 pl-10 pr-4 text-sm font-medium text-slate-100 placeholder-slate-500 transition-all outline-none"
+                  class="w-full bg-slate-950/80 border border-slate-800 hover:border-slate-700 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 rounded-xl py-3 pl-10 pr-4 text-slate-100 placeholder-slate-500 transition-all outline-none"
                 />
               </div>
-              <button 
-                @click="handleStockSearch(false)" 
-                :disabled="dashboardLoading"
-                class="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-200 text-sm font-bold rounded-xl transition-all duration-300 shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                搜尋
-              </button>
-              <button 
-                @click="handleStockSearch(true)" 
-                :disabled="dashboardLoading"
-                class="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-sm font-bold rounded-xl transition-all duration-300 shadow-md shadow-cyan-500/20 shrink-0 cursor-pointer flex items-center space-x-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <svg v-if="dashboardLoading" class="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <span>⚡ 即時更新並儲存</span>
-              </button>
+              <div class="flex items-center gap-2 shrink-0">
+                <button 
+                  @click="handleStockSearch(false)" 
+                  :disabled="dashboardLoading"
+                  class="flex-1 sm:flex-none px-5 py-3 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-200 font-bold rounded-xl transition-all duration-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  搜尋
+                </button>
+                <button 
+                  @click="handleStockSearch(true)" 
+                  :disabled="dashboardLoading"
+                  class="flex-2 sm:flex-none px-5 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold rounded-xl transition-all duration-300 shadow-md shadow-cyan-500/20 cursor-pointer flex items-center justify-center space-x-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <svg v-if="dashboardLoading" class="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span>⚡ 即時更新並儲存</span>
+                </button>
+              </div>
             </div>
             
             <div class="text-xs text-slate-500 font-medium md:text-right">

@@ -25,12 +25,11 @@ dist/
 db_conf/init_multi_db.sql
 backend/entrypoint.sh
 backend/backend_ver
-backend/.backend_ver/gnews_scraper/v1/news/
-backend/.backend_ver/gnews_scraper/v2/news/
-backend/.backend_ver/gnews_scraper/v2/logs/
+backend/.backend_ver/corp_scraper/
+backend/.backend_ver/gnews_scraper/
 frontend/entrypoint.sh
 frontend/frontend_ver
-
+.agents/
 
 # Django
 staticfiles/
