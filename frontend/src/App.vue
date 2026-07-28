@@ -221,12 +221,13 @@ const handleStockSearch = async (updateMode: boolean = false) => {
           if (pollRes.ok) {
             const pollData: StockFetchResponse = await pollRes.json()
             if (pollData.success && pollData.has_data && pollData.profile) {
-              // 成功撈到最新資料，停止輪詢並渲染
+              // 成功撈到最新資料，停止輪詢
               clearInterval(pollIntervalId!)
               pollIntervalId = null
-              stockData.value = pollData
+              
+              // 再次抓取「公司基本資料與新聞」與「技術分析圖表」資料，確保資料完整與重繪
+              await handleStockSearch(false)
               dashboardSuccessMsg.value = '🎉 資料庫落庫與技術分析計算完成！已成功渲染最新數據！'
-              dashboardLoading.value = false
             }
           }
         } catch (pollErr) {

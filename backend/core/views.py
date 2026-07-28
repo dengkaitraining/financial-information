@@ -112,11 +112,14 @@ def stock_fetch_api(request):
     # 2. 本地查詢模式
     try:
         profile = CompanyProfile.objects.filter(stock_id=stock_id).first()
-        if not profile:
+        from stock_db.models import TechnicalAnalysis
+        has_ta = TechnicalAnalysis.objects.filter(stock=profile).exists() if profile else False
+        
+        if not profile or not has_ta:
             return JsonResponse({
                 "success": True,
                 "has_data": False,
-                "msg": "本機資料庫無此股票資料，請點擊「即時更新並儲存」"
+                "msg": "本機資料庫無此股票資料，或技術分析資料計算中，請點擊「即時更新並儲存」"
             })
 
         # 序列化 Profile 25 欄位

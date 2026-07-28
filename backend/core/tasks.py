@@ -86,8 +86,8 @@ def update_all_scheduled_stocks() -> str:
         else:
             fail_count += 1
         
-        # 避免請求過於頻繁
-        time.sleep(2)
+        # 避免請求過於頻繁 (每個股票抓取間隔 10 秒)
+        time.sleep(10)
 
     msg = f"所有排程股票更新完成。成功: {success_count} 筆, 失敗: {fail_count} 筆"
     logger.info(msg)

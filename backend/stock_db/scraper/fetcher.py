@@ -6,6 +6,7 @@
 import datetime
 import logging
 import zoneinfo
+import time
 from typing import Dict, List, Tuple
 from email.utils import parsedate_to_datetime
 import twstock
@@ -107,6 +108,8 @@ class StockProfileFetcher:
             'group_name': tw_info.group if tw_info else None,
             'main_business': business_summary or None
         }
+        # 爬蟲防封鎖延遲 5 秒
+        time.sleep(5)
         return profile
 
     def fetch_calendar(self, stock_id: str) -> List[Dict]:
@@ -141,6 +144,8 @@ class StockProfileFetcher:
         except Exception as e:
             logging.error(f"Error fetching calendar for {stock_id}: {e}")
 
+        # 爬蟲防封鎖延遲 5 秒
+        time.sleep(5)
         return calendar_events
 
     def fetch_news_and_announcements(self, stock_id: str, company_name: str) -> Tuple[List[Dict], List[Dict]]:
@@ -187,4 +192,6 @@ class StockProfileFetcher:
                 'summary': desc
             })
 
+        # 爬蟲防封鎖延遲 5 秒
+        time.sleep(5)
         return news_list, ann_list
