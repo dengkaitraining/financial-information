@@ -1,10 +1,10 @@
 <!-- ======================================================================= -->
 <!-- Vue 3.5 主元件 (App.vue)                                                 -->
-<!-- 說明：資訊系統開發環境儀表板 (路由存取點：http://localhost/tech-stack)     -->
-<!-- 功能：提供「服務節點健康監控」與「公司資料戰情資訊室」兩大核心 Tab 分頁     -->
+<!-- 說明：資訊系統開發環境與台股戰情室儀表板                                   -->
 <!-- ======================================================================= -->
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import * as echarts from 'echarts'
 
 /**
  * 系統連線狀態 JSON 介面定義
@@ -74,6 +74,31 @@ interface NewsItem {
   summary: string | null
 }
 
+interface TechnicalAnalysisData {
+  trade_date: string
+  volume: number | null
+  open_price: number | null
+  high_price: number | null
+  low_price: number | null
+  close_price: number | null
+  k_value: number | null
+  d_value: number | null
+  j_value: number | null
+  macd: number | null
+  macd_signal: number | null
+  bias: number | null
+  williams_r: number | null
+  bbi: number | null
+  cdp: number | null
+  ah: number | null
+  nh: number | null
+  nl: number | null
+  al: number | null
+  pdi: number | null
+  mdi: number | null
+  adx: number | null
+}
+
 interface StockFetchResponse {
   success: boolean
   has_data: boolean
@@ -83,6 +108,7 @@ interface StockFetchResponse {
   profile?: CompanyProfileData
   calendar?: CalendarEvent[]
   news?: NewsItem[]
+  technical_analysis?: TechnicalAnalysisData[]
 }
 
 // 導覽 Tab 分頁狀態 ('health' | 'dashboard')
@@ -112,12 +138,16 @@ const lastCheckedTime = ref<string>('')
 const AUTO_REFRESH_INTERVAL_MS = 10 * 60 * 1000
 let timerId: ReturnType<typeof setInterval> | null = null
 
-// Tab 2: 戰情室響應式變數
+// Tab 2: 戰情室與技術分析響應式變數
 const searchStockId = ref('')
 const dashboardLoading = ref(false)
 const dashboardError = ref<string | null>(null)
 const dashboardSuccessMsg = ref<string | null>(null)
 const stockData = ref<StockFetchResponse | null>(null)
+const activeSubTab = ref<'profile' | 'ta'>('profile') // 'profile' 為基本面，'ta' 為技術分析
+const selectedIndicator = ref<'kd' | 'macd' | 'dmi' | 'bias' | 'williams'>('kd') // 當前技術指標子圖
+const taChartRef = ref<HTMLDivElement | null>(null)
+let myChart: echarts.ECharts | null = null
 let pollIntervalId: ReturnType<typeof setInterval> | null = null
 
 /**
@@ -151,78 +181,70 @@ const handleStockSearch = async (updateMode: boolean = false) => {
     return
   }
   
-  if (!/^\d+$/.test(searchStockId.value.trim())) {
-    dashboardError.value = '股票代碼必須全部為數字'
-    return
-  }
-
-  // 清除前次的輪詢
+  // 清理先前的狀態與定時輪詢
+  dashboardError.value = null
+  dashboardSuccessMsg.value = null
   if (pollIntervalId) {
     clearInterval(pollIntervalId)
     pollIntervalId = null
   }
 
   dashboardLoading.value = true
-  dashboardError.value = null
-  dashboardSuccessMsg.value = null
-
-  const stockId = searchStockId.value.trim()
 
   try {
-    const res = await fetch(`/api/stock/fetch/?stock_id=${stockId}&update=${updateMode}`)
+    const res = await fetch(`/api/stock/fetch/?stock_id=${searchStockId.value.trim()}&update=${updateMode}`)
     if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}))
-      throw new Error(errJson.error || `HTTP 錯誤! 狀態碼: ${res.status}`)
+      const errData = await res.json()
+      throw new Error(errData.error || `HTTP 錯誤: ${res.status}`)
     }
-    
-    const data = await res.json()
-    
+
+    const data: StockFetchResponse = await res.json()
+
     if (updateMode && data.task_started) {
-      dashboardSuccessMsg.value = `已啟動背景即時抓取更新任務，正在擷取 GNews 與 yfinance 資料...`
+      // 進入背景非同步輪詢模式，每 3 秒檢查一次資料是否完成寫入
+      dashboardSuccessMsg.value = '已啟動背景資料擷取與翻譯排程，大約需要 3 - 5 秒，系統正自動為您同步數據...'
       
-      // 啟動輪詢，每 3 秒查詢一次本地資料
-      let pollCount = 0
+      let attempts = 0
       pollIntervalId = setInterval(async () => {
-        pollCount++
+        attempts++
+        if (attempts > 30) {
+          // 超過 90 秒停止輪詢，避免連線無限拉長
+          clearInterval(pollIntervalId!)
+          pollIntervalId = null
+          dashboardLoading.value = false
+          dashboardError.value = '更新逾時，外部伺服器連線遲緩，請稍後再試。'
+          return
+        }
+
         try {
-          const pollRes = await fetch(`/api/stock/fetch/?stock_id=${stockId}&update=false`)
+          const pollRes = await fetch(`/api/stock/fetch/?stock_id=${searchStockId.value.trim()}&update=false`)
           if (pollRes.ok) {
             const pollData: StockFetchResponse = await pollRes.json()
-            if (pollData.success && pollData.has_data) {
+            if (pollData.success && pollData.has_data && pollData.profile) {
+              // 成功撈到最新資料，停止輪詢並渲染
+              clearInterval(pollIntervalId!)
+              pollIntervalId = null
               stockData.value = pollData
-              dashboardSuccessMsg.value = `股票 ${stockId} 資料已順利於背景更新完成並落庫！`
+              dashboardSuccessMsg.value = '🎉 資料庫落庫與技術分析計算完成！已成功渲染最新數據！'
               dashboardLoading.value = false
-              if (pollIntervalId) {
-                clearInterval(pollIntervalId)
-                pollIntervalId = null
-              }
             }
           }
         } catch (pollErr) {
-          console.error("輪詢出錯:", pollErr)
-        }
-
-        // 輪詢超過 25 次 (75 秒) 停止，避免無限循環
-        if (pollCount >= 25) {
-          dashboardError.value = '背景抓取更新超時，請稍後再試。您可以嘗試重新點選本機搜尋。'
-          dashboardLoading.value = false
-          if (pollIntervalId) {
-            clearInterval(pollIntervalId)
-            pollIntervalId = null
-          }
+          console.error('輪詢出錯: ', pollErr)
         }
       }, 3000)
+
     } else {
-      // 純查詢模式
+      // 純查詢模式，直接渲染資料
       stockData.value = data
       if (!data.has_data) {
-        dashboardError.value = data.msg || '資料庫無此股票資料，請點擊「即時更新並儲存」以重新爬取。'
+        dashboardError.value = '本機資料庫無此股票資料，請點擊「即時更新並儲存」啟動爬蟲'
       }
       dashboardLoading.value = false
     }
   } catch (err: any) {
     console.error(err)
-    dashboardError.value = err.message || '連線至後端伺服器失敗'
+    dashboardError.value = err.message || '連線至後端股票 API 失敗'
     dashboardLoading.value = false
   }
 }
@@ -251,7 +273,258 @@ const formatCurrency = (val: number | null) => {
   return new Intl.NumberFormat('zh-TW').format(val)
 }
 
+/**
+ * 初始化 Apache ECharts 技術分析綜合圖表
+ */
+const initTaChart = () => {
+  if (!taChartRef.value || !stockData.value || !stockData.value.technical_analysis || stockData.value.technical_analysis.length === 0) {
+    return
+  }
+
+  // 銷毀舊有實例防止 Memory Leak
+  if (myChart) {
+    myChart.dispose()
+  }
+
+  myChart = echarts.init(taChartRef.value, 'dark')
+
+  const taList = stockData.value.technical_analysis
+  const dates = taList.map(item => item.trade_date)
+  const volumes = taList.map(item => item.volume)
+
+  // K線 [open, close, lowest, highest]
+  const candlestickData = taList.map(item => [
+    item.open_price,
+    item.close_price,
+    item.low_price,
+    item.high_price
+  ])
+
+  // BBI / CDP 折線
+  const bbiData = taList.map(item => item.bbi)
+  const cdpData = taList.map(item => item.cdp)
+
+  // 1. KD
+  const kData = taList.map(item => item.k_value)
+  const dData = taList.map(item => item.d_value)
+  const jData = taList.map(item => item.j_value)
+
+  // 2. MACD
+  const difData = taList.map(item => item.macd)
+  const deaData = taList.map(item => item.macd_signal)
+  const macdHistData = taList.map(item => {
+    if (item.macd !== null && item.macd_signal !== null) {
+      return (item.macd - item.macd_signal) * 2
+    }
+    return null
+  })
+
+  // 3. DMI
+  const pdiData = taList.map(item => item.pdi)
+  const mdiData = taList.map(item => item.mdi)
+  const adxData = taList.map(item => item.adx)
+
+  // 4. BIAS (6日)
+  const biasData = taList.map(item => item.bias)
+
+  // 5. Williams %R (14日)
+  const williamsData = taList.map(item => item.williams_r)
+
+  // 依據前端選擇的指標，定義子圖3的 Series 與 Legend
+  let indicatorSeries: any[] = []
+  let indicatorLegend: string[] = []
+
+  if (selectedIndicator.value === 'kd') {
+    indicatorLegend = ['K值(9日)', 'D值(9日)', 'J值(9日)']
+    indicatorSeries = [
+      { name: 'K值(9日)', type: 'line', data: kData, xAxisIndex: 2, yAxisIndex: 2, showSymbol: false, lineStyle: { width: 1.5, color: '#f59e0b' } },
+      { name: 'D值(9日)', type: 'line', data: dData, xAxisIndex: 2, yAxisIndex: 2, showSymbol: false, lineStyle: { width: 1.5, color: '#3b82f6' } },
+      { name: 'J值(9日)', type: 'line', data: jData, xAxisIndex: 2, yAxisIndex: 2, showSymbol: false, lineStyle: { width: 1.5, color: '#a855f7' } }
+    ]
+  } else if (selectedIndicator.value === 'macd') {
+    indicatorLegend = ['DIF (MACD)', 'DEA (Signal)', 'MACD Bar']
+    indicatorSeries = [
+      { name: 'DIF (MACD)', type: 'line', data: difData, xAxisIndex: 2, yAxisIndex: 2, showSymbol: false, lineStyle: { width: 1.5, color: '#f59e0b' } },
+      { name: 'DEA (Signal)', type: 'line', data: deaData, xAxisIndex: 2, yAxisIndex: 2, showSymbol: false, lineStyle: { width: 1.5, color: '#3b82f6' } },
+      {
+        name: 'MACD Bar',
+        type: 'bar',
+        data: macdHistData,
+        xAxisIndex: 2,
+        yAxisIndex: 2,
+        itemStyle: {
+          color: (params: any) => params.data >= 0 ? '#ef4444' : '#10b981'
+        }
+      }
+    ]
+  } else if (selectedIndicator.value === 'dmi') {
+    indicatorLegend = ['+DI', '-DI', 'ADX']
+    indicatorSeries = [
+      { name: '+DI', type: 'line', data: pdiData, xAxisIndex: 2, yAxisIndex: 2, showSymbol: false, lineStyle: { width: 1.5, color: '#ef4444' } },
+      { name: '-DI', type: 'line', data: mdiData, xAxisIndex: 2, yAxisIndex: 2, showSymbol: false, lineStyle: { width: 1.5, color: '#10b981' } },
+      { name: 'ADX', type: 'line', data: adxData, xAxisIndex: 2, yAxisIndex: 2, showSymbol: false, lineStyle: { width: 1.5, color: '#f59e0b' } }
+    ]
+  } else if (selectedIndicator.value === 'bias') {
+    indicatorLegend = ['BIAS (6日)']
+    indicatorSeries = [
+      { name: 'BIAS (6日)', type: 'line', data: biasData, xAxisIndex: 2, yAxisIndex: 2, showSymbol: false, lineStyle: { width: 1.5, color: '#ec4899' } }
+    ]
+  } else if (selectedIndicator.value === 'williams') {
+    indicatorLegend = ['Williams %R (14日)']
+    indicatorSeries = [
+      { name: 'Williams %R (14日)', type: 'line', data: williamsData, xAxisIndex: 2, yAxisIndex: 2, showSymbol: false, lineStyle: { width: 1.5, color: '#14b8a6' } }
+    ]
+  }
+
+  const option = {
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'cross' }
+    },
+    legend: {
+      data: ['日K線', 'BBI', 'CDP', '成交量', ...indicatorLegend],
+      textStyle: { color: '#94a3b8' }
+    },
+    axisPointer: {
+      link: [{ xAxisIndex: 'all' }]
+    },
+    grid: [
+      { left: '8%', right: '4%', height: '45%' }, // 主K線
+      { left: '8%', right: '4%', top: '60%', height: '12%' }, // 成交量
+      { left: '8%', right: '4%', top: '78%', height: '15%' }  // 指標
+    ],
+    xAxis: [
+      {
+        type: 'category',
+        data: dates,
+        boundaryGap: false,
+        axisLine: { lineStyle: { color: '#334155' } },
+        axisLabel: { color: '#94a3b8' }
+      },
+      {
+        type: 'category',
+        gridIndex: 1,
+        data: dates,
+        boundaryGap: false,
+        axisLine: { lineStyle: { color: '#334155' } },
+        axisLabel: { show: false }
+      },
+      {
+        type: 'category',
+        gridIndex: 2,
+        data: dates,
+        boundaryGap: false,
+        axisLine: { lineStyle: { color: '#334155' } },
+        axisLabel: { color: '#94a3b8' }
+      }
+    ],
+    yAxis: [
+      {
+        scale: true,
+        axisLine: { lineStyle: { color: '#334155' } },
+        axisLabel: { color: '#94a3b8' },
+        splitLine: { lineStyle: { color: '#1e293b' } }
+      },
+      {
+        scale: true,
+        gridIndex: 1,
+        axisLine: { show: false },
+        axisLabel: { show: false },
+        splitLine: { show: false }
+      },
+      {
+        scale: true,
+        gridIndex: 2,
+        axisLine: { lineStyle: { color: '#334155' } },
+        axisLabel: { color: '#94a3b8' },
+        splitLine: { lineStyle: { color: '#1e293b' } }
+      }
+    ],
+    dataZoom: [
+      {
+        type: 'inside',
+        xAxisIndex: [0, 1, 2],
+        start: 70,
+        end: 100
+      },
+      {
+        show: true,
+        type: 'slider',
+        xAxisIndex: [0, 1, 2],
+        top: '94%',
+        start: 70,
+        end: 100,
+        textStyle: { color: '#94a3b8' }
+      }
+    ],
+    series: [
+      {
+        name: '日K線',
+        type: 'candlestick',
+        data: candlestickData,
+        itemStyle: {
+          color: '#ef4444',
+          color0: '#10b981',
+          borderColor: '#ef4444',
+          borderColor0: '#10b981'
+        }
+      },
+      {
+        name: 'BBI',
+        type: 'line',
+        data: bbiData,
+        showSymbol: false,
+        lineStyle: { width: 1.5, color: '#f43f5e' }
+      },
+      {
+        name: 'CDP',
+        type: 'line',
+        data: cdpData,
+        showSymbol: false,
+        lineStyle: { width: 1.5, type: 'dashed', color: '#06b6d4' }
+      },
+      {
+        name: '成交量',
+        type: 'bar',
+        xAxisIndex: 1,
+        yAxisIndex: 1,
+        data: volumes,
+        itemStyle: {
+          color: (params: any) => {
+            const idx = params.dataIndex
+            const row = candlestickData[idx]
+            if (row && row[1] >= row[0]) {
+              return '#ef4444'
+            }
+            return '#10b981'
+          }
+        }
+      },
+      ...indicatorSeries
+    ]
+  }
+
+  myChart.setOption(option)
+}
+
+// 監聽子頁籤切換、指標切換以及股票資料更新以重繪 ECharts
+watch([activeSubTab, selectedIndicator, stockData], async () => {
+  if (activeSubTab.value === 'ta') {
+    await nextTick()
+    initTaChart()
+  }
+})
+
+// 監聽視窗大小調整以自適應 ECharts 佈局
+const handleResize = () => {
+  if (myChart) {
+    myChart.resize()
+  }
+}
+
 onMounted(() => {
+  window.addEventListener('resize', handleResize)
   if (activeTab.value === 'health') {
     // 首次載入頁面時：自動執行健康檢測 1 次
     setTimeout(fetchHealthStatus, 1500)
@@ -261,108 +534,127 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
   if (timerId) {
     clearInterval(timerId)
   }
   if (pollIntervalId) {
     clearInterval(pollIntervalId)
   }
+  if (myChart) {
+    myChart.dispose()
+  }
 })
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#070b13] text-[#f3f4f6] flex flex-col items-center justify-between p-6 relative overflow-hidden select-none">
+  <div class="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans antialiased selection:bg-cyan-500/30 selection:text-cyan-200">
     
-    <!-- 背景流光漸層光暈 -->
-    <div class="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-blue-900/10 rounded-full blur-[120px] pointer-events-none"></div>
-    <div class="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-cyan-900/10 rounded-full blur-[120px] pointer-events-none"></div>
-
-    <!-- 主介面容器 -->
-    <main class="w-full max-w-6xl z-10 flex-grow flex flex-col my-4">
-      
-      <!-- 頁頭標題區 -->
-      <div class="text-center mb-6">
-        <div class="inline-flex items-center space-x-2 bg-slate-900/60 border border-slate-800 px-4 py-1.5 rounded-full text-xs font-semibold tracking-wider text-cyan-400 uppercase mb-3 shadow-sm">
-          <span v-if="activeTab === 'dashboard'">📈 Taiwan Stock Profile Room ( /profile )</span>
-          <span v-else>🐳 Docker Containerized Stack ( /tech-stack )</span>
-        </div>
-        <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white via-cyan-100 to-blue-400 bg-clip-text text-transparent drop-shadow-md">
-          <span v-if="activeTab === 'dashboard'">台股公司基本資料戰情室</span>
-          <span v-else>系統檢測與健康監控</span>
-        </h1>
-        <p class="mt-2 text-sm text-slate-400 max-w-2xl mx-auto">
-          <span v-if="activeTab === 'dashboard'">
-            透過輸入股票代碼搜尋本機庫存，支援手動即時抓取 GNews 與 yfinance 英文資訊並自動英翻中落庫。
-          </span>
-          <span v-else>
-            整合 Django 5.2 LTS, MariaDB 12.3 與 Redis 8.8 容器，動態監控後端與數據庫快取之連線狀態。
-          </span>
-        </p>
-
-        <!-- 導覽頁籤切換 (Tabs) -->
-        <div v-if="showTabs" class="mt-6 inline-flex p-1 bg-slate-900/80 border border-slate-800 rounded-xl">
-          <button 
-            @click="activeTab = 'dashboard'"
-            :class="[activeTab === 'dashboard' ? 'bg-cyan-500 text-[#070b13] font-bold shadow-md' : 'text-slate-400 hover:text-slate-200']"
-            class="px-5 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-all duration-300"
-          >
-            📊 公司資料戰情資訊室
-          </button>
-          <button 
-            @click="activeTab = 'health'"
-            :class="[activeTab === 'health' ? 'bg-cyan-500 text-[#070b13] font-bold shadow-md' : 'text-slate-400 hover:text-slate-200']"
-            class="px-5 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-all duration-300"
-          >
-            🐳 服務節點健康監控
-          </button>
-        </div>
-      </div>
-
-      <!-- ======================================================================= -->
-      <!-- TAB 1: 公司資料戰情資訊室                                                 -->
-      <!-- ======================================================================= -->
-      <section v-if="activeTab === 'dashboard'" class="w-full flex-grow flex flex-col space-y-6">
+    <!-- 頂部霓虹流光背景 -->
+    <div class="fixed top-0 left-0 w-full h-[350px] bg-gradient-to-b from-cyan-950/20 via-slate-950/0 to-transparent pointer-events-none z-0"></div>
+    <div class="fixed top-[-100px] left-[20%] w-[600px] h-[300px] bg-cyan-500/10 rounded-full blur-[120px] pointer-events-none z-0"></div>
+    
+    <!-- 頂部導航列 -->
+    <header class="w-full border-b border-slate-900 bg-slate-950/80 backdrop-blur-md sticky top-0 z-50">
+      <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
         
-        <!-- 股票代碼搜尋控制列 -->
-        <div class="glassmorphism p-6 rounded-2xl flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div class="flex-grow flex flex-col md:flex-row md:items-center gap-4">
-            <div class="flex-grow relative">
-              <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
-                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </span>
-              <input 
-                v-model="searchStockId" 
-                @keyup.enter="handleStockSearch(false)"
-                type="text" 
-                placeholder="請輸入台股股票代碼 (如：2330)" 
-                class="w-full pl-10 pr-4 py-2.5 bg-slate-950/80 border border-slate-800 focus:border-cyan-500/80 rounded-xl text-sm font-semibold tracking-wide text-white placeholder-slate-500 outline-none transition-all"
-              />
-            </div>
-            <div class="flex items-center gap-2">
+        <!-- LOGO 區 -->
+        <div class="flex items-center space-x-3 select-none">
+          <div class="h-9 w-9 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+            <svg class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+            </svg>
+          </div>
+          <div>
+            <span class="text-base font-black tracking-wider bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent">FINANCIAL</span>
+            <span class="text-xs font-bold text-cyan-400 block tracking-widest leading-none mt-0.5">CONTAINER STACK</span>
+          </div>
+        </div>
+
+        <!-- 導航分頁切換按鈕 (根據 showTabs 狀態動態隱藏) -->
+        <nav v-if="showTabs" class="flex space-x-1 p-1 bg-slate-900/60 rounded-xl border border-slate-800/40">
+          <button 
+            @click="activeTab = 'dashboard'" 
+            :class="[activeTab === 'dashboard' ? 'bg-cyan-500/25 text-cyan-300 border-cyan-500/30' : 'text-slate-400 hover:text-slate-200 border-transparent']"
+            class="px-4 py-1.5 text-xs font-bold rounded-lg transition-all duration-300 border"
+          >
+            台股戰情室
+          </button>
+          <button 
+            @click="activeTab = 'health'" 
+            :class="[activeTab === 'health' ? 'bg-cyan-500/25 text-cyan-300 border-cyan-500/30' : 'text-slate-400 hover:text-slate-200 border-transparent']"
+            class="px-4 py-1.5 text-xs font-bold rounded-lg transition-all duration-300 border"
+          >
+            服務節點監控
+          </button>
+        </nav>
+
+        <!-- 管理後台快速跳轉 -->
+        <a 
+          href="/admin/" 
+          target="_blank" 
+          class="px-3.5 py-1.5 text-xs font-bold text-slate-300 hover:text-slate-100 bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-xl transition-all duration-300 flex items-center space-x-1.5 shadow-sm"
+        >
+          <span>管理後台</span>
+          <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+        </a>
+
+      </div>
+    </header>
+
+    <!-- 主要內容區 -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-6 py-8 relative z-10">
+
+      <!-- ======================================================================= -->
+      <!-- SECTION 1: 公司基本資料戰情室 (Dashboard)                                -->
+      <!-- ======================================================================= -->
+      <section v-if="activeTab === 'dashboard'" class="space-y-6">
+        
+        <!-- 頂部搜尋與功能控制卡片 -->
+        <div class="glassmorphism rounded-2xl p-6 shadow-2xl border border-slate-900/50">
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            
+            <!-- 搜尋輸入框與控制 -->
+            <div class="flex items-center space-x-2.5 max-w-lg w-full">
+              <div class="relative flex-grow">
+                <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                  <svg class="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+                <input 
+                  type="text" 
+                  v-model="searchStockId" 
+                  @keyup.enter="handleStockSearch(false)"
+                  placeholder="請輸入台灣股市代碼 (例如: 2330, 2454)" 
+                  class="w-full bg-slate-950/80 border border-slate-800 hover:border-slate-700 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 rounded-xl py-2.5 pl-10 pr-4 text-sm font-medium text-slate-100 placeholder-slate-500 transition-all outline-none"
+                />
+              </div>
               <button 
                 @click="handleStockSearch(false)" 
                 :disabled="dashboardLoading"
-                class="px-5 py-2.5 bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-850 active:bg-slate-900 rounded-xl text-xs font-bold tracking-wider text-cyan-400 cursor-pointer disabled:opacity-50 transition-all"
+                class="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-200 text-sm font-bold rounded-xl transition-all duration-300 shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {{ dashboardLoading ? '處理中...' : '🔍 本機搜尋' }}
+                搜尋
               </button>
               <button 
                 @click="handleStockSearch(true)" 
                 :disabled="dashboardLoading"
-                class="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-darkBg rounded-xl text-xs font-extrabold tracking-wider cursor-pointer disabled:opacity-50 transition-all flex items-center space-x-1 shadow-md shadow-cyan-950/20"
+                class="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-sm font-bold rounded-xl transition-all duration-300 shadow-md shadow-cyan-500/20 shrink-0 cursor-pointer flex items-center space-x-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <svg v-if="dashboardLoading" class="animate-spin h-3.5 w-3.5 text-darkBg" fill="none" viewBox="0 0 24 24">
+                <svg v-if="dashboardLoading" class="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                   <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
                 <span>⚡ 即時更新並儲存</span>
               </button>
             </div>
-          </div>
-          <div class="text-xs text-slate-500 font-medium md:text-right">
-            手動即時更新會將股票加入後台 <span class="text-slate-300 font-mono">Celery Beat</span> 排程清單中。
+            
+            <div class="text-xs text-slate-500 font-medium md:text-right">
+              本機資料搜尋為實時回應；即時更新抓取將股票自動加入後台 <span class="text-slate-300 font-mono">Celery Beat</span> 定時排程清單。
+            </div>
           </div>
         </div>
 
@@ -380,443 +672,368 @@ onUnmounted(() => {
           <span>{{ dashboardSuccessMsg }}</span>
         </div>
 
-        <!-- 戰情室數據展示面板 -->
+        <!-- 戰情室數據展示主分頁 (當前有股票資料時顯示) -->
         <div v-if="stockData && stockData.has_data && stockData.profile" class="space-y-6">
           
-          <!-- 區塊一：股票及公司主資料卡片 -->
-          <div class="glassmorphism rounded-2xl p-6 relative overflow-hidden">
-            <!-- 裝飾流光 -->
-            <div class="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-cyan-500 to-transparent"></div>
-            
-            <div class="flex flex-col md:flex-row md:items-center md:justify-between border-b border-slate-800/80 pb-4 mb-6">
-              <div>
-                <h2 class="text-2xl font-black text-slate-100 flex items-center space-x-2">
-                  <span>{{ stockData.profile.company_name }}</span>
-                  <span class="text-lg text-slate-400 font-mono">({{ stockData.profile.stock_id }})</span>
-                </h2>
-                <p class="text-xs text-slate-400 mt-1">
-                  英文簡稱: {{ stockData.profile.eng_short_name || '-' }} • 統一編號: {{ stockData.profile.tax_id || '-' }}
-                </p>
-              </div>
-              <div class="mt-3 md:mt-0 flex flex-wrap gap-2">
-                <span class="px-2.5 py-1 rounded bg-slate-900 border border-slate-800 text-[10px] font-bold text-cyan-400 uppercase">
-                  {{ stockData.profile.market_type }}
-                </span>
-                <span class="px-2.5 py-1 rounded bg-slate-900 border border-slate-800 text-[10px] font-bold text-cyan-400">
-                  {{ stockData.profile.industry_category }}
-                </span>
-                <span v-if="stockData.in_schedule" class="px-2.5 py-1 rounded bg-blue-950/60 border border-blue-900/40 text-[10px] font-bold text-blue-300">
-                  📅 已排程定時更新
-                </span>
-              </div>
-            </div>
-
-            <!-- 25 項欄位精緻 Grid 展示 -->
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-              
-              <!-- 子分類 1: 營運管理團隊 -->
-              <div class="bg-slate-950/40 rounded-xl p-4 border border-slate-900/60">
-                <h3 class="text-xs font-black text-cyan-400 mb-3 tracking-wider uppercase flex items-center space-x-1.5">
-                  <span class="h-2 w-1 bg-cyan-400 rounded-sm"></span>
-                  <span>管理階層成員</span>
-                </h3>
-                <div class="space-y-2.5 text-xs">
-                  <div class="flex justify-between border-b border-slate-900/40 pb-1.5">
-                    <span class="text-slate-500">董事長</span>
-                    <span class="text-slate-300 font-bold">{{ stockData.profile.chairman || '-' }}</span>
-                  </div>
-                  <div class="flex justify-between border-b border-slate-900/40 pb-1.5">
-                    <span class="text-slate-500">總經理</span>
-                    <span class="text-slate-300 font-bold">{{ stockData.profile.general_manager || '-' }}</span>
-                  </div>
-                  <div class="flex justify-between border-b border-slate-900/40 pb-1.5">
-                    <span class="text-slate-500">發言人</span>
-                    <span class="text-slate-300">{{ stockData.profile.spokesperson || '-' }}</span>
-                  </div>
-                  <div class="flex justify-between">
-                    <span class="text-slate-500">代理發言人</span>
-                    <span class="text-slate-300">{{ stockData.profile.deputy_spokesperson || '-' }}</span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 子分類 2: 資本與市場價值 -->
-              <div class="bg-slate-950/40 rounded-xl p-4 border border-slate-900/60">
-                <h3 class="text-xs font-black text-cyan-400 mb-3 tracking-wider uppercase flex items-center space-x-1.5">
-                  <span class="h-2 w-1 bg-cyan-400 rounded-sm"></span>
-                  <span>資本與市值</span>
-                </h3>
-                <div class="space-y-2.5 text-xs">
-                  <div class="flex justify-between border-b border-slate-900/40 pb-1.5">
-                    <span class="text-slate-500">市值 (百萬)</span>
-                    <span class="text-cyan-300 font-mono font-bold">{{ formatCurrency(stockData.profile.market_cap_millions) }}</span>
-                  </div>
-                  <div class="flex justify-between border-b border-slate-900/40 pb-1.5">
-                    <span class="text-slate-500">實收股本 (元)</span>
-                    <span class="text-slate-300 font-mono">{{ formatCurrency(stockData.profile.capital) }}</span>
-                  </div>
-                  <div class="flex justify-between border-b border-slate-900/40 pb-1.5">
-                    <span class="text-slate-500">發行普通股數</span>
-                    <span class="text-slate-300 font-mono">{{ formatCurrency(stockData.profile.issued_shares) }}</span>
-                  </div>
-                  <div class="flex justify-between">
-                    <span class="text-slate-500">董監持股比例</span>
-                    <span class="text-slate-300 font-mono">{{ stockData.profile.insider_holding_ratio !== null ? stockData.profile.insider_holding_ratio + '%' : '-' }}</span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 子分類 3: 成立與上市時間 -->
-              <div class="bg-slate-950/40 rounded-xl p-4 border border-slate-900/60">
-                <h3 class="text-xs font-black text-cyan-400 mb-3 tracking-wider uppercase flex items-center space-x-1.5">
-                  <span class="h-2 w-1 bg-cyan-400 rounded-sm"></span>
-                  <span>成立與掛牌日期</span>
-                </h3>
-                <div class="space-y-2.5 text-xs">
-                  <div class="flex justify-between border-b border-slate-900/40 pb-1.5">
-                    <span class="text-slate-500">成立日期</span>
-                    <span class="text-slate-300 font-mono">{{ stockData.profile.establishment_date || '-' }}</span>
-                  </div>
-                  <div class="flex justify-between border-b border-slate-900/40 pb-1.5">
-                    <span class="text-slate-500">掛牌日期</span>
-                    <span class="text-slate-300 font-mono">{{ stockData.profile.listing_date || '-' }}</span>
-                  </div>
-                  <div class="flex justify-between border-b border-slate-900/40 pb-1.5">
-                    <span class="text-slate-500">所屬集團</span>
-                    <span class="text-slate-300">{{ stockData.profile.group_name || '-' }}</span>
-                  </div>
-                  <div class="flex justify-between">
-                    <span class="text-slate-500">簽證會計師</span>
-                    <span class="text-slate-300">{{ stockData.profile.auditor || '-' }}</span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 子分類 4: 聯絡與股務代理 -->
-              <div class="bg-slate-950/40 rounded-xl p-4 border border-slate-900/60">
-                <h3 class="text-xs font-black text-cyan-400 mb-3 tracking-wider uppercase flex items-center space-x-1.5">
-                  <span class="h-2 w-1 bg-cyan-400 rounded-sm"></span>
-                  <span>聯繫資訊</span>
-                </h3>
-                <div class="space-y-2.5 text-xs">
-                  <div class="flex justify-between border-b border-slate-900/40 pb-1.5">
-                    <span class="text-slate-500">總機電話</span>
-                    <span class="text-slate-300 font-mono">{{ stockData.profile.phone || '-' }}</span>
-                  </div>
-                  <div class="flex justify-between border-b border-slate-900/40 pb-1.5">
-                    <span class="text-slate-500">電子郵件</span>
-                    <span class="text-slate-300 truncate max-w-[150px]">{{ stockData.profile.email || '-' }}</span>
-                  </div>
-                  <div class="flex justify-between border-b border-slate-900/40 pb-1.5">
-                    <span class="text-slate-500">網站</span>
-                    <a v-if="stockData.profile.website" :href="stockData.profile.website" target="_blank" class="text-cyan-400 hover:underline truncate max-w-[150px]">
-                      {{ stockData.profile.website }}
-                    </a>
-                    <span v-else class="text-slate-300">-</span>
-                  </div>
-                  <div class="flex justify-between">
-                    <span class="text-slate-500">傳真號碼</span>
-                    <span class="text-slate-300 font-mono">{{ stockData.profile.fax || '-' }}</span>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-
-            <!-- 其他擴充欄位 (地址、股務代理、業務概述) -->
-            <div class="mt-6 pt-5 border-t border-slate-800/60 grid grid-cols-1 md:grid-cols-3 gap-6 text-xs">
-              <div class="md:col-span-2 space-y-3">
-                <div class="flex items-start">
-                  <span class="text-slate-500 shrink-0 w-20">公司地址:</span>
-                  <span class="text-slate-300">{{ stockData.profile.address || '-' }}</span>
-                </div>
-                <div class="flex items-start">
-                  <span class="text-slate-500 shrink-0 w-20">主要經營業務:</span>
-                  <span class="text-slate-300 leading-relaxed font-medium">{{ stockData.profile.main_business || '-' }}</span>
-                </div>
-              </div>
-              <div class="space-y-3">
-                <div class="flex justify-between">
-                  <span class="text-slate-500">股務代理:</span>
-                  <span class="text-slate-300 font-medium">{{ stockData.profile.stock_transfer_agent || '-' }}</span>
-                </div>
-                <div class="flex justify-between">
-                  <span class="text-slate-500">資料更新時間:</span>
-                  <span class="text-slate-400 font-mono">{{ stockData.profile.updated_at }}</span>
-                </div>
-              </div>
-            </div>
-
+          <!-- 子頁籤切換 Tabs (📋 公司基本資料與新聞 VS 📈 技術分析圖表) -->
+          <div class="flex gap-4 border-b border-slate-900 pb-2">
+            <button 
+              @click="activeSubTab = 'profile'" 
+              :class="[
+                'px-4 py-2 text-sm font-bold rounded-lg transition-all duration-300 flex items-center gap-2 cursor-pointer',
+                activeSubTab === 'profile' 
+                  ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.15)]' 
+                  : 'text-slate-400 hover:text-slate-200 border border-transparent'
+              ]"
+            >
+              📋 公司基本資料與新聞
+            </button>
+            <button 
+              @click="activeSubTab = 'ta'" 
+              :class="[
+                'px-4 py-2 text-sm font-bold rounded-lg transition-all duration-300 flex items-center gap-2 cursor-pointer',
+                activeSubTab === 'ta' 
+                  ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.15)]' 
+                  : 'text-slate-400 hover:text-slate-200 border border-transparent'
+              ]"
+            >
+              📈 技術分析圖表
+            </button>
           </div>
 
-          <!-- 下方左右區塊：行事曆與新聞 -->
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <!-- 子頁籤 A：公司基本資料與新聞 -->
+          <div v-if="activeSubTab === 'profile'" class="space-y-6">
             
-            <!-- 左側：行事曆 (佔 1/3) -->
-            <div class="glassmorphism rounded-2xl p-6 flex flex-col justify-between">
-              <div>
-                <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
-                  <h3 class="font-bold text-slate-100 flex items-center space-x-1.5">
-                    <span class="h-3 w-1 bg-violet-400 rounded-sm"></span>
-                    <span>重大行事曆 (近10筆)</span>
-                  </h3>
-                  <button 
-                    @click="openMoreCalendar" 
-                    class="text-[10px] font-black text-violet-400 hover:text-violet-300 border border-violet-800/40 px-2 py-0.5 rounded hover:bg-violet-950/20 cursor-pointer transition"
-                  >
-                    MORE +
-                  </button>
+            <!-- 股票及公司主資料卡片 -->
+            <div class="glassmorphism rounded-2xl p-6 relative overflow-hidden">
+              <div class="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-cyan-500 to-transparent"></div>
+              
+              <div class="flex flex-col md:flex-row md:items-center md:justify-between border-b border-slate-800/80 pb-4 mb-6">
+                <div>
+                  <h2 class="text-2xl font-black text-slate-100 flex items-center space-x-2">
+                    <span>{{ stockData.profile.company_name }}</span>
+                    <span class="text-lg text-slate-400 font-mono">({{ stockData.profile.stock_id }})</span>
+                  </h2>
+                  <p class="text-xs text-slate-400 mt-1">
+                    英文簡稱: {{ stockData.profile.eng_short_name || '-' }} • 統一編號: {{ stockData.profile.tax_id || '-' }}
+                  </p>
+                </div>
+                
+                <div class="flex items-center space-x-2 mt-4 md:mt-0">
+                  <span class="px-2.5 py-1 rounded bg-slate-900 border border-slate-800 text-[10px] font-bold text-cyan-400 tracking-wider">
+                    {{ stockData.profile.market_type }}
+                  </span>
+                  <span class="px-2.5 py-1 rounded bg-slate-900 border border-slate-800 text-[10px] font-bold text-slate-300 tracking-wider">
+                    {{ stockData.profile.industry_category }}
+                  </span>
+                  <span v-if="stockData.in_schedule" class="px-2.5 py-1 rounded bg-blue-950/60 border border-blue-900/40 text-[10px] font-bold text-blue-300">
+                    已加入定時排程
+                  </span>
+                </div>
+              </div>
+
+              <!-- 4 大維度指標 Grid (基本經營、市值股本、時間節點、聯絡窗口) -->
+              <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                
+                <!-- 欄位維度 1: 經營治理 -->
+                <div class="bg-slate-950/40 rounded-xl p-4 border border-slate-900">
+                  <h3 class="text-xs font-bold text-slate-400 border-b border-slate-800/60 pb-2 mb-3">👔 經營與治理團隊</h3>
+                  <div class="space-y-2.5 text-xs">
+                    <div class="flex justify-between"><span class="text-slate-500">董事長</span><span class="text-slate-300 font-bold">{{ stockData.profile.chairman || '-' }}</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500">總經理</span><span class="text-slate-300 font-bold">{{ stockData.profile.general_manager || '-' }}</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500">發言人</span><span class="text-slate-300">{{ stockData.profile.spokesperson || '-' }}</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500">代理發言人</span><span class="text-slate-300">{{ stockData.profile.deputy_spokesperson || '-' }}</span></div>
+                  </div>
                 </div>
 
-                <div v-if="stockData.calendar && stockData.calendar.length" class="space-y-3">
+                <!-- 欄位維度 2: 市值股本 -->
+                <div class="bg-slate-950/40 rounded-xl p-4 border border-slate-900">
+                  <h3 class="text-xs font-bold text-slate-400 border-b border-slate-800/60 pb-2 mb-3">💰 股本與市值規模</h3>
+                  <div class="space-y-2.5 text-xs">
+                    <div class="flex justify-between"><span class="text-slate-500">市值 (百萬)</span><span class="text-cyan-300 font-mono font-bold">{{ formatCurrency(stockData.profile.market_cap_millions) }}</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500">股本 (元)</span><span class="text-slate-300 font-mono">{{ formatCurrency(stockData.profile.capital) }}</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500">已發行普通股數</span><span class="text-slate-300 font-mono">{{ formatCurrency(stockData.profile.issued_shares) }}</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500">董監持股比例</span><span class="text-slate-300 font-mono">{{ stockData.profile.insider_holding_ratio !== null ? stockData.profile.insider_holding_ratio + '%' : '-' }}</span></div>
+                  </div>
+                </div>
+
+                <!-- 欄位維度 3: 歷史時間 -->
+                <div class="bg-slate-950/40 rounded-xl p-4 border border-slate-900">
+                  <h3 class="text-xs font-bold text-slate-400 border-b border-slate-800/60 pb-2 mb-3">📅 成立與掛牌時間</h3>
+                  <div class="space-y-2.5 text-xs">
+                    <div class="flex justify-between"><span class="text-slate-500">成立日期</span><span class="text-slate-300 font-mono">{{ stockData.profile.establishment_date || '-' }}</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500">掛牌日期</span><span class="text-slate-300 font-mono">{{ stockData.profile.listing_date || '-' }}</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500">所屬集團</span><span class="text-slate-300">{{ stockData.profile.group_name || '-' }}</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500">簽證會計師</span><span class="text-slate-300">{{ stockData.profile.auditor || '-' }}</span></div>
+                  </div>
+                </div>
+
+                <!-- 欄位維度 4: 聯絡資訊 -->
+                <div class="bg-slate-950/40 rounded-xl p-4 border border-slate-900">
+                  <h3 class="text-xs font-bold text-slate-400 border-b border-slate-800/60 pb-2 mb-3">📞 聯絡窗口與網站</h3>
+                  <div class="space-y-2.5 text-xs">
+                    <div class="flex justify-between"><span class="text-slate-500">總機電話</span><span class="text-slate-300 font-mono">{{ stockData.profile.phone || '-' }}</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500">電子郵件</span><span class="text-slate-300 truncate max-w-[150px]">{{ stockData.profile.email || '-' }}</span></div>
+                    <div class="flex justify-between">
+                      <span class="text-slate-500">公司網站</span>
+                      <a v-if="stockData.profile.website" :href="stockData.profile.website" target="_blank" class="text-cyan-400 hover:underline truncate max-w-[150px]">
+                        {{ stockData.profile.website }}
+                      </a>
+                      <span v-else class="text-slate-300">-</span>
+                    </div>
+                    <div class="flex justify-between"><span class="text-slate-500">傳真號碼</span><span class="text-slate-300 font-mono">{{ stockData.profile.fax || '-' }}</span></div>
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- 地址、業務經營及落庫更新時間 -->
+              <div class="mt-6 pt-6 border-t border-slate-800/80 grid grid-cols-1 md:grid-cols-12 gap-4 text-xs">
+                <div class="md:col-span-12 flex flex-col md:flex-row md:items-center"><span class="text-slate-500 font-bold shrink-0 w-24">公司地址：</span><span class="text-slate-300">{{ stockData.profile.address || '-' }}</span></div>
+                <div class="md:col-span-12 flex flex-col md:flex-row md:items-start"><span class="text-slate-500 font-bold shrink-0 w-24 mt-1">主要經營業務：</span><span class="text-slate-300 leading-relaxed font-medium">{{ stockData.profile.main_business || '-' }}</span></div>
+                <div class="md:col-span-12 flex flex-col md:flex-row md:items-center"><span class="text-slate-500 font-bold shrink-0 w-24">股務代理機構：</span><span class="text-slate-300 font-medium">{{ stockData.profile.stock_transfer_agent || '-' }}</span></div>
+                
+                <div class="md:col-span-12 text-right text-[10px] text-slate-500 mt-2">
+                  <span>資料更新時間: {{ stockData.profile.updated_at }} (Aisa/Taipei Time)</span>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- 下方行事曆與相關新聞雙欄 -->
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+              
+              <!-- 股東常會與股利發放行事曆 (佔 5 欄) -->
+              <div class="md:col-span-5 glassmorphism rounded-2xl p-6 border border-slate-900/50 flex flex-col">
+                <div class="flex items-center justify-between border-b border-slate-800/80 pb-4 mb-4">
+                  <div class="flex items-center space-x-2">
+                    <div class="w-1 h-4 bg-cyan-500 rounded"></div>
+                    <h3 class="text-sm font-bold text-slate-100">📅 股東會與股利發放行事曆</h3>
+                  </div>
+                  <button @click="openMoreCalendar" class="text-xs font-bold text-cyan-400 hover:text-cyan-300 flex items-center space-x-0.5 cursor-pointer">
+                    <span>MORE</span>
+                    <span>+</span>
+                  </button>
+                </div>
+                
+                <div v-if="stockData.calendar && stockData.calendar.length" class="space-y-3 flex-grow">
                   <div 
                     v-for="(event, idx) in stockData.calendar" 
                     :key="idx"
-                    class="flex items-start justify-between text-xs border-b border-slate-900 pb-2"
+                    class="p-3 bg-slate-950/40 border border-slate-900 rounded-xl flex items-center justify-between text-xs"
                   >
                     <div>
-                      <div class="font-bold text-slate-200">{{ event.event_type }}</div>
-                      <div class="text-[10px] text-slate-500 mt-0.5">{{ event.description || '除權息/股東會' }}</div>
+                      <span class="font-bold text-slate-200">{{ event.event_type }}</span>
+                      <p class="text-[10px] text-slate-500 mt-1">{{ event.description || '無詳細描述' }}</p>
                     </div>
-                    <span class="text-[10px] font-mono text-violet-400 bg-violet-950/30 px-2 py-0.5 rounded border border-violet-900/20">
+                    <span class="font-mono text-cyan-400 font-bold bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-900/40">
                       {{ event.event_date }}
                     </span>
                   </div>
                 </div>
-                <div v-else class="text-center py-10 text-slate-600 text-xs">
-                  (無行事曆資料)
+                <div v-else class="text-center py-12 text-slate-500 text-xs flex-grow flex items-center justify-center">
+                  目前無重大行事曆資料。
                 </div>
               </div>
-            </div>
 
-            <!-- 右側：相關新聞公告 (佔 2/3) -->
-            <div class="glassmorphism rounded-2xl p-6 md:col-span-2 flex flex-col justify-between">
-              <div>
-                <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
-                  <h3 class="font-bold text-slate-100 flex items-center space-x-1.5">
-                    <span class="h-3 w-1 bg-blue-400 rounded-sm"></span>
-                    <span>相關新聞與個股公告 (近10筆)</span>
-                  </h3>
-                  <button 
-                    @click="openMoreNews" 
-                    class="text-[10px] font-black text-blue-400 hover:text-blue-300 border border-blue-800/40 px-2 py-0.5 rounded hover:bg-blue-950/20 cursor-pointer transition"
-                  >
-                    MORE +
+              <!-- 近 10 筆相關新聞與個股公告 (佔 7 欄) -->
+              <div class="md:col-span-7 glassmorphism rounded-2xl p-6 border border-slate-900/50 flex flex-col">
+                <div class="flex items-center justify-between border-b border-slate-800/80 pb-4 mb-4">
+                  <div class="flex items-center space-x-2">
+                    <div class="w-1 h-4 bg-cyan-500 rounded"></div>
+                    <h3 class="text-sm font-bold text-slate-100">📰 相關新聞與個股公告</h3>
+                  </div>
+                  <button @click="openMoreNews" class="text-xs font-bold text-cyan-400 hover:text-cyan-300 flex items-center space-x-0.5 cursor-pointer">
+                    <span>MORE</span>
+                    <span>+</span>
                   </button>
                 </div>
 
-                <div v-if="stockData.news && stockData.news.length" class="space-y-4">
+                <div v-if="stockData.news && stockData.news.length" class="space-y-4 flex-grow">
                   <div 
                     v-for="(news, idx) in stockData.news" 
-                    :key="idx" 
-                    class="border-b border-slate-900 pb-3 last:border-b-0 text-xs group"
+                    :key="idx"
+                    class="p-3.5 bg-slate-950/40 border border-slate-900 hover:border-slate-800 rounded-xl transition text-xs relative overflow-hidden"
                   >
-                    <div class="flex items-center space-x-2 text-[10px] text-slate-500 mb-1">
-                      <span class="px-1.5 py-0.5 font-bold rounded" :class="[news.news_type === 'ANNOUNCEMENT' ? 'bg-rose-950/50 text-rose-300' : 'bg-blue-950/50 text-blue-300']">
-                        {{ news.news_type === 'ANNOUNCEMENT' ? '公告' : '新聞' }}
+                    <div class="flex items-center justify-between mb-2">
+                      <span :class="[news.news_type === 'NEWS' ? 'bg-indigo-950/50 text-indigo-400 border border-indigo-900/40' : 'bg-amber-950/50 text-amber-400 border border-amber-900/40']" class="px-2 py-0.5 rounded text-[10px] font-bold">
+                        {{ news.news_type }}
                       </span>
-                      <span>{{ news.publisher || 'GNews' }}</span>
-                      <span>•</span>
-                      <span class="font-mono">{{ news.published_date ? news.published_date.slice(0, 16) : '' }}</span>
+                      <span class="text-[10px] text-slate-500 font-mono">{{ news.published_date || '-' }}</span>
                     </div>
-                    <a :href="news.url" target="_blank" class="font-bold text-slate-200 group-hover:text-cyan-400 hover:underline leading-snug block transition-colors">
+                    <a :href="news.url" target="_blank" class="font-bold text-slate-200 hover:text-cyan-400 hover:underline leading-relaxed block">
                       {{ news.title }}
                     </a>
+                    <p class="text-[10px] text-slate-500 mt-2 line-clamp-2 leading-relaxed">
+                      {{ news.summary || '無摘要說明。' }}
+                    </p>
+                    <div class="text-[10px] text-cyan-500 mt-2 font-semibold">來源: {{ news.publisher || '未知' }}</div>
                   </div>
                 </div>
-                <div v-else class="text-center py-10 text-slate-600 text-xs">
-                  (無新聞公告資料)
+                <div v-else class="text-center py-12 text-slate-500 text-xs flex-grow flex items-center justify-center">
+                  目前無相關新聞與公告。
                 </div>
               </div>
+
+            </div>
+
+          </div>
+
+          <!-- 子頁籤 B：技術分析圖表 -->
+          <div v-else-if="activeSubTab === 'ta'" class="space-y-6">
+            
+            <div class="glassmorphism rounded-2xl p-6 relative overflow-hidden">
+              <div class="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-cyan-500 to-transparent"></div>
+              
+              <!-- 圖表頂部指標切換選單 -->
+              <div class="flex flex-col md:flex-row md:items-center md:justify-between border-b border-slate-800/80 pb-4 mb-6 gap-4">
+                <div>
+                  <h3 class="text-lg font-black text-slate-100 flex items-center space-x-2">
+                    <span>{{ stockData.profile.company_name }} 個股技術分析 (K線 / 技術指標)</span>
+                  </h3>
+                  <p class="text-xs text-slate-400 mt-1">
+                    使用前台 ECharts 繪製 • 數據包含 CDP、BBI、成交量、以及自選指標，共享 X 軸縮放
+                  </p>
+                </div>
+                
+                <!-- 指標選擇器 -->
+                <div class="flex flex-wrap gap-2">
+                  <button 
+                    v-for="ind in [
+                      { id: 'kd', name: 'KD 指標' },
+                      { id: 'macd', name: 'MACD 柱狀' },
+                      { id: 'dmi', name: 'DMI 動向' },
+                      { id: 'bias', name: 'BIAS 乖離率' },
+                      { id: 'williams', name: 'Williams %R' }
+                    ]"
+                    :key="ind.id"
+                    @click="selectedIndicator = ind.id as any"
+                    :class="[
+                      'px-3 py-1.5 text-xs font-bold rounded-lg border transition-all cursor-pointer',
+                      selectedIndicator === ind.id 
+                        ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40 shadow-sm' 
+                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                    ]"
+                  >
+                    {{ ind.name }}
+                  </button>
+                </div>
+              </div>
+
+              <!-- ECharts 渲染畫布容器 -->
+              <div class="relative w-full bg-slate-950/40 rounded-xl border border-slate-900 p-4">
+                <div ref="taChartRef" class="w-full" style="height: 600px;"></div>
+              </div>
+
+              <!-- 圖表註解說明 -->
+              <div class="mt-4 p-4 bg-slate-950/60 rounded-xl border border-slate-900/80 text-[11px] text-slate-400 leading-relaxed grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <h4 class="font-bold text-slate-300 mb-1">📈 逆勢操作系統 CDP 說明：</h4>
+                  <p>CDP (虛線) 代表當日合理中心值。AH/NH 為壓力點 (近高/最高)；NL/AL 為支撐點 (近低/最低)。用以研判當日強弱與逆勢買賣點。</p>
+                  <h4 class="font-bold text-slate-300 mt-2 mb-1">📊 多空指標 BBI 說明：</h4>
+                  <p>BBI (粉紅實線) 是 3、6、12、24 日移動平均線的綜合加權。收盤價在 BBI 之上為多頭市場；收盤價在 BBI 之下為空頭市場。</p>
+                </div>
+                <div>
+                  <h4 class="font-bold text-slate-300 mb-1">🛠️ 技術指標計算區間說明：</h4>
+                  <p>技術指標是基於您在後台配置的排程清單 (StockScheduleList) 中的 <code>analysis_period</code> (預設為前 3 年的歷史數據) 完整計算產出，圖表可透過滑動下方拉桿 (DataZoom) 來縮放查看指定期間數據。</p>
+                </div>
+              </div>
+
             </div>
 
           </div>
 
         </div>
 
-        <div v-else-if="!dashboardLoading" class="glassmorphism rounded-2xl p-16 text-center text-slate-500">
-          <svg class="h-12 w-12 mx-auto mb-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+        <!-- 初始無資料引導 -->
+        <div v-else class="text-center py-20 bg-slate-900/20 backdrop-blur-sm border border-slate-900/50 rounded-2xl">
+          <svg class="mx-auto h-12 w-12 text-slate-600 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
           </svg>
-          <p class="text-base font-bold text-slate-400">目前尚無股票查詢結果</p>
-          <p class="text-xs text-slate-600 mt-1.5 max-w-md mx-auto">
-            請於上方搜尋框輸入要查詢的台灣股票代碼 (如：2330)。若資料庫無資料，請點擊「即時更新並儲存」發動爬蟲抓取。
+          <h3 class="text-slate-300 font-bold text-sm">尚未載入股票資料</h3>
+          <p class="text-xs text-slate-500 mt-2 max-w-sm mx-auto leading-relaxed">
+            請在上方輸入台股股票代碼（如 <span class="font-mono text-cyan-400 font-bold">2330</span>），並點擊「搜尋」獲取本機資料，或點擊「即時更新並儲存」啟動外部數據爬蟲。
           </p>
         </div>
 
       </section>
 
       <!-- ======================================================================= -->
-      <!-- TAB 2: 原健康狀態監控儀表板                                               -->
+      <!-- SECTION 2: 服務節點監控 (Health Monitor)                               -->
       <!-- ======================================================================= -->
-      <section v-if="activeTab === 'health'" class="w-full flex-grow flex flex-col space-y-6">
+      <section v-else-if="activeTab === 'health'" class="space-y-8">
         
-        <!-- 定時檢測說明提示標籤 -->
-        <div class="text-center">
-          <div class="inline-flex items-center space-x-2 bg-blue-950/40 border border-blue-800/40 px-3 py-1 rounded-full text-xs text-blue-300">
-            <span class="relative flex h-2 w-2">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-              <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-            </span>
-            <span>首次連線自動檢查 1 次 • 爾後每 10 分鐘自動重新檢測 1 次</span>
-            <span v-if="lastCheckedTime" class="text-slate-400 border-l border-slate-700 pl-2 ml-1">上次檢測: {{ lastCheckedTime }}</span>
+        <!-- 健康狀態控制面板 -->
+        <div class="glassmorphism rounded-2xl p-6 shadow-2xl border border-slate-900/50 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 class="text-xl font-black text-slate-100 flex items-center space-x-2">
+              <span>Containerization Stack 系統服務檢測</span>
+            </h1>
+            <p class="text-xs text-slate-400 mt-1">
+              實時連線檢測 Django 5.2、MariaDB 12.3 與 Redis 8.8 快取的容器狀態
+            </p>
           </div>
+          
+          <button 
+            @click="fetchHealthStatus" 
+            :disabled="healthLoading"
+            class="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs font-bold rounded-xl transition-all duration-300 shadow-md shadow-cyan-500/20 shrink-0 cursor-pointer flex items-center space-x-2"
+          >
+            <svg v-if="healthLoading" class="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span>手動重新檢測</span>
+          </button>
         </div>
 
-        <!-- 快捷操作卡片區 -->
+        <!-- 3 大服務節點卡片 Grid -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
           
-          <!-- 卡片 1: Django Admin -->
-          <a href="/admin/" target="_blank" class="glassmorphism p-6 rounded-2xl flex items-center justify-between group hover:border-cyan-500/30 transition-all duration-300 transform hover:-translate-y-1 hover:shadow-lg hover:shadow-cyan-950/20">
-            <div class="flex items-center space-x-4">
-              <div class="p-3 bg-teal-950/40 border border-teal-800/40 text-teal-400 rounded-xl group-hover:bg-teal-500/10 transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                </svg>
-              </div>
-              <div>
-                <h3 class="font-bold text-slate-200">Django Unfold 後台</h3>
-                <p class="text-xs text-teal-300 font-mono mt-0.5">帳號: admin | 密碼: (環境變數設定)</p>
-              </div>
-            </div>
-            <div class="text-slate-500 group-hover:text-cyan-400 transition-colors">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-              </svg>
-            </div>
-          </a>
-
-          <!-- 卡片 2: 健康檢查 API -->
-          <a href="/api/status/" target="_blank" class="glassmorphism p-6 rounded-2xl flex items-center justify-between group hover:border-blue-500/30 transition-all duration-300 transform hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-950/20">
-            <div class="flex items-center space-x-4">
-              <div class="p-3 bg-blue-950/40 border border-blue-800/40 text-blue-400 rounded-xl group-hover:bg-blue-500/10 transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </div>
-              <div>
-                <h3 class="font-bold text-slate-200">健康檢查 JSON API</h3>
-                <p class="text-xs text-slate-400 mt-0.5">檢視 MariaDB 與 Redis 連線數據</p>
-              </div>
-            </div>
-            <div class="text-slate-500 group-hover:text-blue-400 transition-colors">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-              </svg>
-            </div>
-          </a>
-
-          <!-- 卡片 3: 手動重新檢測 -->
-          <button @click="fetchHealthStatus" :disabled="healthLoading" class="glassmorphism p-6 rounded-2xl flex items-center justify-between group hover:border-violet-500/30 transition-all duration-300 transform hover:-translate-y-1 hover:shadow-lg hover:shadow-violet-950/20 text-left w-full cursor-pointer">
-            <div class="flex items-center space-x-4">
-              <div class="p-3 bg-violet-950/40 border border-violet-800/40 text-violet-400 rounded-xl group-hover:bg-violet-500/10 transition-colors" :class="{ 'animate-spin': healthLoading }">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 8H17" />
-                </svg>
-              </div>
-              <div>
-                <h3 class="font-bold text-slate-200">手動重新檢測</h3>
-                <p class="text-xs text-slate-400 mt-0.5">{{ healthLoading ? '檢測中...' : '立即重新測試各容器服務連線' }}</p>
-              </div>
-            </div>
-            <div class="text-slate-500 group-hover:text-violet-400 transition-colors">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-            </div>
-          </button>
-
-        </div>
-
-        <!-- 容器服務節點狀態卡片區 -->
-        <div class="grid grid-cols-1 md:grid-cols-5 gap-6">
-          
-          <!-- 1. Web Proxy (Apache HTTPD) -->
-          <div class="glassmorphism p-6 rounded-2xl flex flex-col justify-between hover:border-orange-500/20 transition-all duration-300">
+          <!-- 卡片 1: Django Backend -->
+          <div class="glassmorphism rounded-2xl p-6 border border-slate-900/50 flex flex-col justify-between hover:border-slate-800 transition duration-300">
             <div>
               <div class="flex justify-between items-start mb-4">
-                <span class="text-xs font-bold uppercase tracking-wider text-orange-400 bg-orange-950/40 px-2.5 py-1 rounded-md border border-orange-900/30">Apache</span>
+                <span class="text-xs font-bold uppercase tracking-wider text-cyan-400 bg-cyan-950/40 px-2.5 py-1 rounded-md border border-cyan-900/30">Django 5.2</span>
                 <span class="flex h-2.5 w-2.5 relative">
                   <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                </span>
-              </div>
-              <h2 class="text-base font-bold text-slate-100">Apache HTTPD</h2>
-              <p class="text-[11px] text-slate-400 mt-2 leading-relaxed">
-                反向代理網頁伺服器。監聽 Port 80，分配 /tech-stack、/admin 與 / 路由。
-              </p>
-            </div>
-            <div class="mt-6 pt-4 border-t border-slate-800/60 text-[10px] text-slate-500">
-              <div>容器名稱: <span class="text-slate-300 font-mono">apache_web</span></div>
-              <div class="mt-1">通訊埠: <span class="text-slate-300 font-mono">80:80</span></div>
-            </div>
-          </div>
-
-          <!-- 2. Frontend (Vue 3.5) -->
-          <div class="glassmorphism p-6 rounded-2xl flex flex-col justify-between hover:border-emerald-500/20 transition-all duration-300">
-            <div>
-              <div class="flex justify-between items-start mb-4">
-                <span class="text-xs font-bold uppercase tracking-wider text-emerald-400 bg-emerald-950/40 px-2.5 py-1 rounded-md border border-emerald-900/30">Vue 3.5</span>
-                <span class="flex h-2.5 w-2.5 relative">
-                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                </span>
-              </div>
-              <h2 class="text-base font-bold text-slate-100">Vue.js / Vite</h2>
-              <p class="text-[11px] text-slate-400 mt-2 leading-relaxed">
-                前端 SPA 技術堆疊，掛載 TypeScript 與 Tailwind CSS 4.3 效能編譯引擎。
-              </p>
-            </div>
-            <div class="mt-6 pt-4 border-t border-slate-800/60 text-[10px] text-slate-500">
-              <div>框架版本: <span class="text-slate-300 font-mono">Vue v3.5</span></div>
-              <div class="mt-1">樣式引擎: <span class="text-slate-300 font-mono">Tailwind v4.3</span></div>
-            </div>
-          </div>
-
-          <!-- 3. Backend (Django 5.2) -->
-          <div class="glassmorphism p-6 rounded-2xl flex flex-col justify-between hover:border-blue-500/20 transition-all duration-300" :class="{ 'border-rose-500/30': healthError }">
-            <div>
-              <div class="flex justify-between items-start mb-4">
-                <span class="text-xs font-bold uppercase tracking-wider text-blue-400 bg-blue-950/40 px-2.5 py-1 rounded-md border border-blue-900/30">Django 5.2</span>
-                <span class="flex h-2.5 w-2.5 relative">
-                  <span v-if="!healthLoading && !healthError" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span :class="[healthLoading ? 'bg-amber-500' : healthError ? 'bg-rose-500' : 'bg-emerald-500']" class="relative inline-flex rounded-full h-2.5 w-2.5"></span>
                 </span>
               </div>
               <h2 class="text-base font-bold text-slate-100">Django Backend</h2>
               <p class="text-[11px] text-slate-400 mt-2 leading-relaxed">
-                Python Web 後端。負責 REST API、資料庫遷移管理、Celery 排程觸發與 Unfold Admin。
+                Python 3.12 Web 應用伺服器。執行 REST API、Celery 背景佇列派發、與 Unfold 系統管理。
               </p>
             </div>
             <div class="mt-6 pt-4 border-t border-slate-800/60 text-[10px] text-slate-500">
-              <div>狀態: <span :class="[healthError ? 'text-rose-400' : 'text-slate-300']" class="font-semibold">{{ healthLoading ? '檢查中...' : healthError ? '連線失敗' : '在線' }}</span></div>
-              <div class="mt-1" v-if="backendHealth">版本: <span class="text-slate-300 font-mono">{{ backendHealth.django_version }}</span></div>
+              <div>狀態: <span class="text-emerald-400 font-semibold">運行中</span></div>
+              <div class="mt-1">核心版本: <span class="text-slate-300 font-mono">{{ backendHealth ? 'Django ' + backendHealth.django_version : '載入中...' }}</span></div>
             </div>
           </div>
 
-          <!-- 4. Database (MariaDB 12.3) -->
-          <div class="glassmorphism p-6 rounded-2xl flex flex-col justify-between hover:border-cyan-500/20 transition-all duration-300" :class="{ 'border-rose-500/30': backendHealth && backendHealth.database.status !== 'connected' }">
+          <!-- 卡片 2: MariaDB Database -->
+          <div class="glassmorphism rounded-2xl p-6 border border-slate-900/50 flex flex-col justify-between hover:border-slate-800 transition duration-300">
             <div>
               <div class="flex justify-between items-start mb-4">
-                <span class="text-xs font-bold uppercase tracking-wider text-cyan-400 bg-cyan-950/40 px-2.5 py-1 rounded-md border border-cyan-900/30">MariaDB 12.3</span>
+                <span class="text-xs font-bold uppercase tracking-wider text-blue-400 bg-blue-950/40 px-2.5 py-1 rounded-md border border-blue-900/30">MariaDB 12.3</span>
                 <span class="flex h-2.5 w-2.5 relative">
                   <span v-if="backendHealth && backendHealth.database.status === 'connected'" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span :class="[healthLoading ? 'bg-amber-500' : (backendHealth && backendHealth.database.status === 'connected') ? 'bg-emerald-500' : 'bg-rose-500']" class="relative inline-flex rounded-full h-2.5 w-2.5"></span>
                 </span>
               </div>
-              <h2 class="text-base font-bold text-slate-100">MariaDB SQL</h2>
+              <h2 class="text-base font-bold text-slate-100">MariaDB Database</h2>
               <p class="text-[11px] text-slate-400 mt-2 leading-relaxed">
-                SQL 資料庫，提供 user_stock 與 user_employee 權限隔離與實體 `./db_data` 持久化。
+                多關聯式 SQL 資料庫。包含 `user_stock_db` 與 `db_employee` 多帳號隔離，掛載實體 `./db_data`。
               </p>
             </div>
             <div class="mt-6 pt-4 border-t border-slate-800/60 text-[10px] text-slate-500">
               <div>狀態: <span :class="[(backendHealth && backendHealth.database.status === 'connected') ? 'text-emerald-400' : 'text-rose-400']" class="font-semibold">{{ healthLoading ? '檢查中...' : (backendHealth && backendHealth.database.status === 'connected') ? '已連線' : '無連線' }}</span></div>
-              <div class="mt-1" v-if="backendHealth && backendHealth.database.status === 'connected'">庫名: <span class="text-slate-300 font-mono">{{ backendHealth.database.name }}</span></div>
+              <div class="mt-1">主機位置: <span class="text-slate-300 font-mono">fin-django-db:3306</span></div>
             </div>
           </div>
 
-          <!-- 5. Cache (Redis 8.8) -->
-          <div class="glassmorphism p-6 rounded-2xl flex flex-col justify-between hover:border-rose-500/20 transition-all duration-300" :class="{ 'border-rose-500/30': backendHealth && backendHealth.redis.status !== 'connected' }">
+          <!-- 卡片 3: Redis Cache -->
+          <div class="glassmorphism rounded-2xl p-6 border border-slate-900/50 flex flex-col justify-between hover:border-slate-800 transition duration-300">
             <div>
               <div class="flex justify-between items-start mb-4">
                 <span class="text-xs font-bold uppercase tracking-wider text-rose-400 bg-rose-950/40 px-2.5 py-1 rounded-md border border-rose-900/30">Redis 8.8</span>
@@ -827,7 +1044,7 @@ onUnmounted(() => {
               </div>
               <h2 class="text-base font-bold text-slate-100">Redis Cache</h2>
               <p class="text-[11px] text-slate-400 mt-2 leading-relaxed">
-                快取與 Session 記憶體伺服器。執行高併發快取儲存，掛載實體 `./redis_data`。
+                快取與 Session 記憶體伺服器。執行高併發快取儲存與 Celery Broker 調度，掛載實體 `./redis_data`。
               </p>
             </div>
             <div class="mt-6 pt-4 border-t border-slate-800/60 text-[10px] text-slate-500">
@@ -866,5 +1083,11 @@ onUnmounted(() => {
 </template>
 
 <style>
-/* 可以在這裡加入額外覆寫 */
+/* Glassmorphism 玻璃擬態樣式 */
+.glassmorphism {
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
 </style>

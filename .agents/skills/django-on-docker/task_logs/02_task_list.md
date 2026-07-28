@@ -1,30 +1,26 @@
 # 任務執行清單 (02_task_list.md)
 
-- [x] **1. 環境與依賴配置**
-  - [x] 修改 `backend/requirements.txt`：加入 `celery` & `django-celery-beat`
-  - [x] 修改 `docker-compose.yaml`：新增 `fin-celery-worker` 與 `fin-celery-beat` 服務
-  - [x] 修改 `backend/core/settings.py`：加入 `django_celery_beat` 並配置 Celery parameters
-  - [x] 建立 `backend/core/celery.py` 與修改 `backend/core/__init__.py`
-- [x] **2. 建立資料庫 Model 與執行 Migration**
-  - [x] 於 `backend/core/models.py` 定義 `CompanyProfile`, `CompanyCalendar`, `CompanyNews`, `StockScheduleList`
-  - [x] 執行 `makemigrations` 與 `migrate` 產生/更新資料庫表單
+- [x] **1. 建立 stock_db Django App 與 Models 搬遷重構**
+  - [x] 執行 `python manage.py startapp stock_db` 建立新 App 骨架
+  - [x] 在 `core/settings.py` 的 `INSTALLED_APPS` 註冊 `stock_db`
+  - [x] 於 `stock_db/models.py` 定義 `CompanyProfile`, `CompanyCalendar`, `CompanyNews`, `StockScheduleList` (新增 `analysis_period` 欄位) 與 `TechnicalAnalysis` 模型
+  - [x] 清理 `core/models.py` 與 `core/admin.py`，調整各模組中對 Models 的引用
+- [x] **2. 重新整理資料庫 Migrations**
+  - [x] 刪除原資料庫中與核心舊 core 相關的表單 (或清理遷移)
+  - [x] 執行 `makemigrations stock_db` 與 `migrate` 生成並套用全新 migration
 - [x] **3. Scraper 爬蟲邏輯與 Django ORM 整合**
-  - [x] 建立 `backend/core/scraper/` package 結構
-  - [x] 移植 `translator.py` 與 `fetcher.py`
-  - [x] 實作 `db_django.py` 以 Django ORM 進行 upsert
-  - [x] 於 `backend/core/tasks.py` 建立 Celery `update_single_stock` 與 `update_all_scheduled_stocks` 任務
+  - [x] 新建 `stock_db/scraper/ta_analyzer.py` 移植並調整指標計算與抓取邏輯
+  - [x] 於 `core/tasks.py` 更新 `update_single_stock` 背景任務，加入技術分析抓取與 bulk_create/upsert 機制
 - [x] **4. 註冊 Django Unfold 管理後台**
-  - [x] 建立 `backend/core/admin.py`：將自定義 Models 與 Celery Beat Models 註冊到 Unfold
+  - [x] 於 `stock_db/admin.py` 註冊 5 個 Models 到 Unfold Admin，支援完整的 CRUD 操作
 - [x] **5. 實作 API 與頁面 View**
-  - [x] 於 `backend/core/views.py` 實作股票查詢與即時更新 API (`/api/stock/fetch/`)
-  - [x] 於 `backend/core/views.py` 實作 More 行事曆與新聞頁面
-  - [x] 於 `backend/core/urls.py` 註冊對應 URL 路由
-  - [x] 於 `backend/templates/` 建立 `stock_calendar.html` 與 `stock_news.html`
-- [x] **6. 實作前端戰情室 Dashboard (Vue 3.5)**
-  - [x] 修改 `frontend/src/App.vue` 建立精美戰情室介面，並與後端 API 對接
+  - [x] 調整 `core/views.py` 的 `/api/stock/fetch/` JSON API，使其併入 `technical_analysis` 的完整歷史數據
+- [x] **6. 實作前端戰情室 Dashboard ECharts 圖表 (Vue 3.5)**
+  - [x] 修改 `frontend/package.json` 加入 `echarts` 依賴並執行 `npm install`
+  - [x] 修改 `frontend/src/App.vue` 建立「技術分析圖表」分頁，使用 Apache ECharts 繪製 K線 + CDP, 成交量, KD, MACD, BIAS 等共享 X 軸縮放圖表
 - [x] **7. 驗證與測試**
-  - [x] 於 `backend/core/tests.py` 實作單元測試
-  - [x] 執行 `python manage.py test` 進行測試
+  - [x] 於 `stock_db/tests.py` 實作單元測試
+  - [x] 執行測試命令，確保 100% 通過
   - [x] 手動驗證前台與後台功能是否正常運作
 - [x] **8. 撰寫 Walkthrough 報告**
   - [x] 建立 `walkthrough.md` 說明變更與測試結果

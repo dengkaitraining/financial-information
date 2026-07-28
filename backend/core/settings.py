@@ -39,6 +39,7 @@ INSTALLED_APPS = [
 
     # 本地專案應用模組
     'core',
+    'stock_db',
     'employees',
 ]
 

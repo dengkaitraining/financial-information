@@ -10,7 +10,7 @@ from django.core.cache import cache
 from django.shortcuts import render, get_object_or_404
 from django.views.decorators.clickjacking import xframe_options_exempt
 
-from .models import CompanyProfile, CompanyCalendar, CompanyNews, StockScheduleList
+from stock_db.models import CompanyProfile, CompanyCalendar, CompanyNews, StockScheduleList
 
 logger = logging.getLogger(__name__)
 
@@ -164,6 +164,22 @@ def stock_fetch_api(request):
         for n in news_items:
             n['published_date'] = n['published_date'].strftime('%Y-%m-%d %H:%M:%S') if n['published_date'] else None
 
+        # 擷取歷史技術分析資料 (依交易日期升序)
+        from stock_db.models import TechnicalAnalysis
+        ta_list = list(TechnicalAnalysis.objects.filter(stock=profile).order_by('trade_date').values(
+            'trade_date', 'volume', 'open_price', 'high_price', 'low_price', 'close_price',
+            'k_value', 'd_value', 'j_value', 'macd', 'macd_signal', 'bias', 'williams_r', 'bbi',
+            'cdp', 'ah', 'nh', 'nl', 'al', 'pdi', 'mdi', 'adx'
+        ))
+        for ta in ta_list:
+            ta['trade_date'] = ta['trade_date'].strftime('%Y-%m-%d')
+            # 轉換 Decimal 欄位為 float
+            for key in ['open_price', 'high_price', 'low_price', 'close_price', 'k_value', 'd_value', 'j_value',
+                        'macd', 'macd_signal', 'bias', 'williams_r', 'bbi', 'cdp', 'ah', 'nh', 'nl', 'al',
+                        'pdi', 'mdi', 'adx']:
+                if ta[key] is not None:
+                    ta[key] = float(ta[key])
+
         # 檢查是否已在排程中
         in_schedule = StockScheduleList.objects.filter(stock_id=stock_id).exists()
 
@@ -173,7 +189,8 @@ def stock_fetch_api(request):
             "in_schedule": in_schedule,
             "profile": profile_dict,
             "calendar": calendars,
-            "news": news_items
+            "news": news_items,
+            "technical_analysis": ta_list
         })
     except Exception as e:
         logger.error(f"查詢股票 {stock_id} 失敗: {e}", exc_info=True)

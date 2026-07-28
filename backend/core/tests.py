@@ -9,7 +9,7 @@ from django.core.cache import cache
 from core.db_router import PrimaryEmployeeRouter
 from employees.models import Employee
 from unittest import mock
-from core.models import CompanyProfile, CompanyCalendar, CompanyNews, StockScheduleList
+from stock_db.models import CompanyProfile, CompanyCalendar, CompanyNews, StockScheduleList
 
 class CoreViewsTestCase(TestCase):
     """

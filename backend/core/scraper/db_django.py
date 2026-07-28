@@ -5,7 +5,8 @@
 
 import logging
 from typing import Dict, List
-from core.models import CompanyProfile, CompanyCalendar, CompanyNews
+import numpy as np
+from stock_db.models import CompanyProfile, CompanyCalendar, CompanyNews, TechnicalAnalysis
 
 logger = logging.getLogger(__name__)
 
@@ -104,3 +105,99 @@ class DjangoDatabaseManager:
             except Exception as e:
                 logger.warning(f"Failed to upsert news item for url {url}: {e}")
         return written_count
+
+    def upsert_technical_analysis(self, stock_id: str, df) -> int:
+        """寫入技術分析資料，遇到重複主鍵則更新 (使用 Django ORM)"""
+        if df is None or df.empty:
+            logger.info("No technical analysis data to write.")
+            return 0
+
+        # 將 Pandas 的 NaN 轉為 None
+        df = df.replace({np.nan: None})
+
+        try:
+            stock = CompanyProfile.objects.get(stock_id=stock_id)
+        except CompanyProfile.DoesNotExist:
+            logger.warning(f"CompanyProfile for {stock_id} does not exist. Cannot write TA.")
+            return 0
+
+        # 準備 Bulk Create 資料
+        records = []
+        for _, row in df.iterrows():
+            records.append(TechnicalAnalysis(
+                stock=stock,
+                trade_date=row['Date'],
+                volume=row.get('Volume'),
+                open_price=row.get('Open'),
+                high_price=row.get('High'),
+                low_price=row.get('Low'),
+                close_price=row.get('Close'),
+                k_value=row.get('K'),
+                d_value=row.get('D'),
+                j_value=row.get('J'),
+                macd=row.get('MACD'),
+                macd_signal=row.get('MACD_Signal'),
+                bias=row.get('BIAS'),
+                williams_r=row.get('Williams_R'),
+                bbi=row.get('BBI'),
+                cdp=row.get('CDP'),
+                ah=row.get('AH'),
+                nh=row.get('NH'),
+                nl=row.get('NL'),
+                al=row.get('AL'),
+                pdi=row.get('PDI'),
+                mdi=row.get('MDI'),
+                adx=row.get('ADX')
+            ))
+
+        try:
+            # Django 4.1+ 支援 bulk_create update_conflicts
+            # 在 MySQL/MariaDB 驅動下，無需且不支援指定 unique_fields 參數
+            TechnicalAnalysis.objects.bulk_create(
+                records,
+                update_conflicts=True,
+                update_fields=[
+                    'volume', 'open_price', 'high_price', 'low_price', 'close_price',
+                    'k_value', 'd_value', 'j_value', 'macd', 'macd_signal', 'bias',
+                    'williams_r', 'bbi', 'cdp', 'ah', 'nh', 'nl', 'al', 'pdi', 'mdi', 'adx'
+                ]
+            )
+            return len(records)
+        except Exception as e:
+            logger.error(f"Failed bulk_create technical analysis for {stock_id}: {e}")
+            # Fallback 到 update_or_create 逐筆寫入
+            logger.info("Falling back to update_or_create for TA data...")
+            written = 0
+            for record in records:
+                try:
+                    TechnicalAnalysis.objects.update_or_create(
+                        stock=record.stock,
+                        trade_date=record.trade_date,
+                        defaults={
+                            'volume': record.volume,
+                            'open_price': record.open_price,
+                            'high_price': record.high_price,
+                            'low_price': record.low_price,
+                            'close_price': record.close_price,
+                            'k_value': record.k_value,
+                            'd_value': record.d_value,
+                            'j_value': record.j_value,
+                            'macd': record.macd,
+                            'macd_signal': record.macd_signal,
+                            'bias': record.bias,
+                            'williams_r': record.williams_r,
+                            'bbi': record.bbi,
+                            'cdp': record.cdp,
+                            'ah': record.ah,
+                            'nh': record.nh,
+                            'nl': record.nl,
+                            'al': record.al,
+                            'pdi': record.pdi,
+                            'mdi': record.mdi,
+                            'adx': record.adx
+                        }
+                    )
+                    written += 1
+                except Exception as ex:
+                    logger.warning(f"Failed to upsert single TA row: {ex}")
+            return written

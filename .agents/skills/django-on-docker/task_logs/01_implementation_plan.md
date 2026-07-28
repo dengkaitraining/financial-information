@@ -1,149 +1,129 @@
-# 台股公司基本資料 profile 搜尋、儲存、排程與戰情室系統實作計畫
+# 台股個股技術分析 (Technical Analysis) 搜尋、儲存、排程與 ECharts 戰情室系統實作計畫 (01_implementation_plan.md)
 
-本計畫旨在依據 `<spec>` 需求，在既有的 Docker Compose 容器化 Django + Vue.js 開發環境中，建立搜尋、儲存、排程「公司基本資料 profile 資料」的模組。本實作將使用 Django 5.2 LTS, Django Unfold 後台, Celery, Django Celery Beat 與 Vue 3.5。
-
----
-
-## 系統架構設計
-
-我們將採用 Django ORM 來管理「公司基本資料」、「公司行事曆」、「公司新聞與個股公告」以及「排程更新清單」等表單。此舉將完全相容於 Django Unfold 的後台管理介面，並能夠透過 `django-celery-beat` 元件在後台以圖形化介面配置 Crontab 排程任務。
-
-### 1. 資料庫模型與 Migration 機制
-所有資料表預設建立於 `default` 資料庫中（即 `user_stock_db`，由 `PrimaryEmployeeRouter` 自動路由）。
-我們將**完全使用 Django Models** 定義這四個資料表。如此一來，即可透過 Django 內建的 `python manage.py makemigrations` 與 `python manage.py migrate` 機制管理表單的建立與版控，完美整合 Django migration 機制：
-* **`CompanyProfile`** (公司基本資料表):
-  * `stock_id` (股票代碼, 主鍵)
-  * `company_name` (公司名稱)、`tax_id` (統一編號)、`spokesperson` (發言人)、`eng_short_name` (英文簡稱)、`deputy_spokesperson` (代理發言人)、`establishment_date` (成立時間)、`phone` (總機電話)、`listing_date` (掛牌日期)、`fax` (傳真號碼)、`industry_category` (產業類別)、`website` (公司網站)、`chairman` (董事長)、`email` (電子郵件)、`general_manager` (總經理)、`stock_transfer_agent` (股務代理)、`capital` (股本)、`auditor` (簽證會計師)、`issued_shares` (已發行普通股數)、`address` (地址)、`market_cap_millions` (市值百萬)、`market_type` (市場別)、`insider_holding_ratio` (董監持股比例)、`group_name` (所屬集團)、`main_business` (主要經營業務)
-* **`CompanyCalendar`** (公司行事曆資料表):
-  * 外鍵關聯至 `CompanyProfile` (`stock_id`)
-  * `event_type` (事件類型: 股東常會 / 配股發放日 / 現金股利發放日)
-  * `event_date` (事件日期)
-  * `description` (補充說明)
-  * 聯合唯一約束：`(stock_id, event_type, event_date)`
-* **`CompanyNews`** (公司新聞與個股公告資料表):
-  * 外鍵關聯至 `CompanyProfile` (`stock_id`)
-  * `news_type` (類型: NEWS / ANNOUNCEMENT)
-  * `title` (標題)
-  * `url` (連結 URL, CharField 限制 max_length=500，防範 TEXT 在 Unique 索引中報錯)
-  * `publisher` (來源)、`published_date` (發布時間)、`summary` (摘要)
-  * 聯合唯一約束：`(stock_id, url)`
-* **`StockScheduleList`** (排程更新清單):
-  * `stock_id` (股票代碼, 主鍵)
-
-### 2. 定時排程機制 (Celery + Celery Beat)
-* 在 `docker-compose.yaml` 中新增 `fin-celery-worker` 與 `fin-celery-beat` 服務，共享 `fin-backend` 容器的環境與代碼。
-* 在 `core/tasks.py` 建立：
-  * `core.tasks.update_single_stock(stock_id)`: 負責執行指定股票代碼的爬蟲抓取、英翻中及資料庫 upsert (ORM)。
-  * `core.tasks.update_all_scheduled_stocks()`: 遍歷 `StockScheduleList` 中的股票，呼叫並更新各檔股票。
-* 在 Django Unfold 中重新註冊 `django-celery-beat` 的管理介面，讓管理員可以直接設定 Crontab 定時任務。
-
-### 3. 前端戰情室 Dashboard (Vue 3.5)
-* 於 `frontend/src/App.vue` 中整合「公司基本資料戰情室」介面，採用 **極致深色科技感 (Glassmorphism & Neon Glow)** 的現代 UI。
-* 包含股票搜尋輸入框，支援：
-  * **「搜尋」按鈕**：自 Django API 讀取本機資料。
-  * **「即時更新並儲存」按鈕**：發送請求至後端觸發即時爬蟲與資料落庫，並將該股票自動加入排程清單。
-* 顯示公司基本資料 (以精緻的 Grid 呈現 25 項欄位)、行事曆 (近10筆) 與新聞公告 (近10筆)。
-* 行事曆與新聞各自附帶 **"More"** 按鈕，點擊後會透過 `window.open` 開啟後端渲染的新分頁，列出全部資訊。
-
-### 4. 後端 More 資訊頁面 (Django Template + Tailwind)
-* 新增 `/stock/calendar/<stock_id>/` 與 `/stock/news/<stock_id>/` 路由與 View，回傳精美渲染的 Full List 頁面，搭配 Tailwind CSS 與現代深色戰情室風格，與前台完美呼應。
+本計畫旨在依據 `<spec>` 需求，在既有環境下擴充「個股技術分析 (Technical Analysis)」單元。我們將新建一個獨立的 Django App `stock_db`，將所有與股票資料相關的模型（包括原本 core 裡的 profile 模型以及新建立的技術分析模型）移入該 App 中進行統一 migration 管理；在後端整合非同步/定期排程爬取與格式清洗落庫；並在前台使用 Apache ECharts 繪製包含 K線、CDP、BBI、成交量、KD、MACD、BIAS、威廉與 DMI 指標的綜合技術分析圖表。
 
 ---
 
-## Proposed Changes
+## 📌 系統架構設計
 
-### 🔧 基礎相依性與環境配置
+### 1. 新建 `stock_db` App 與 Models 搬遷重構 (符合需求 8)
+我們將建立一個獨立的 Django App `stock_db`，以擁有專屬 of `stock_db/migrations/` 資料夾。我們將把有關台股的所有模型移入並重新整理：
+* **`CompanyProfile`**、**`CompanyCalendar`**、**`CompanyNews`**：從 `core/models.py` 移入 `stock_db/models.py`。
+* **`StockScheduleList`**：移入 `stock_db/models.py`，並新增 `analysis_period = models.IntegerField(default=3)` 欄位，代表抓取技術分析之歷史年限。
+* **`TechnicalAnalysis` [NEW]**：定義個股技術分析模型，欄位對應 `schema.sql`：
+  * `stock` (外鍵關聯至 `CompanyProfile.stock_id`, `db_column='stock_id'`)
+  * `trade_date` (交易日期, DateField)
+  * 聯合唯一約束：`unique_together = (('stock', 'trade_date'),)`
+  * 價量：`volume`, `open_price`, `high_price`, `low_price`, `close_price`
+  * 指標：`k_value`, `d_value`, `j_value`, `macd`, `macd_signal`, `bias`, `williams_r`, `bbi`
+  * CDP：`cdp`, `ah`, `nh`, `nl`, `al`
+  * DMI：`pdi`, `mdi`, `adx`
+* **資料庫路由**：`PrimaryEmployeeRouter` 依然保留，`stock_db` 模型將被自動路由至主要資料庫 `default` (即 `user_stock_db`)，與原本行為完全一致。
 
-#### [MODIFY] [requirements.txt](file:///home/dengkai/projects/financial-information/backend/requirements.txt)
-* 新增 `celery` 與 `django-celery-beat` 函式庫。
+### 2. 技術分析 Scraper 移植與異步落庫 (符合需求 3 & 4)
+* 建立 `stock_db/scraper/ta_analyzer.py`，移植並微調 yfinance 技術分析指標運算邏輯。
+* 當更新股票（即時更新或定時排程）時，將原有的 `update_single_stock` 任務改為：
+  1. 擷取並更新 `CompanyProfile`、`CompanyCalendar`、`CompanyNews` 並落庫（維持原邏輯）。
+  2. 獲取 `StockScheduleList` 中的 `analysis_period`（例如 3 年）。
+  3. 調用 `TAAnalyzer().calculate_ta(stock_id, f"{analysis_period}y")` 擷取前 3 年數據並計算所有技術指標。
+  4. 進行數據清洗（如 NaN 轉 None，斜線日期格式清洗為 `YYYY-MM-DD`）。
+  5. 使用 Django ORM `bulk_create(..., update_conflicts=True)` 語句一次性高效地 upsert 寫入 `technical_analysis` 表中，保證資料不重複。
 
-#### [MODIFY] [docker-compose.yaml](file:///home/dengkai/projects/financial-information/docker-compose.yaml)
-* 於 `services` 中新增 `fin-celery-worker` 與 `fin-celery-beat` 容器。
+### 3. Django Unfold 後台管理 (符合需求 5)
+* 於 `stock_db/admin.py` 中註冊這 5 個 Models，使管理員可對技術分析數據與排程進行資料新增、修改與刪除。
+* 保留並優化 Unfold 接管的 Celery Beat 圖形化 Crontab 管理界面。
+
+### 4. 前端 Apache ECharts 戰情室分頁 (符合需求 6)
+* 於前端容器中安裝 `echarts` 套件，並寫入 `package.json`。
+* 於 `/api/stock/fetch/` JSON API 的回傳數據中，額外序列化並包含 `technical_analysis` 的完整歷史數據。
+* 修改 `App.vue`：
+  * 在戰情室面板中，加入 `📋 基本資料與新聞` 與 `📈 技術分析圖表` 兩個子分頁。
+  * 點選 `技術分析圖表` 時，動態初始化一個精美的 **Apache ECharts** 圖表：
+    * 採用多個 Grid 垂直佈局，共享 X 軸（交易日期），並加載 `DataZoom` 滑動與縮放控制器。
+    * **主圖 (Candlestick + Lines)**：繪製 K 線圖，並重疊繪製 CDP 參考指標（AH / NH / NL / AL）與多空指標（BBI 線）。
+    * **子圖 1 (Bar)**：成交量 (Volume) 柱狀圖。
+    * **子圖 2 (Line)**：KD, J 線圖 (K / D / J 三條折線)。
+    * **子圖 3 (Bar/Line)**：MACD 指標圖（DIF/DEA/MACD柱狀）。
+    * **子圖 4 (Line)**：DMI / 乖離率 (BIAS) / 威廉指標 (Williams_R)。
+
+---
+
+## 📂 Proposed Changes
+
+### 🔧 基礎環境與 App 建立
 
 #### [MODIFY] [settings.py](file:///home/dengkai/projects/financial-information/backend/core/settings.py)
-* `INSTALLED_APPS` 內註冊 `django_celery_beat`。
-* 配置 `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`, `CELERY_BEAT_SCHEDULER` 參數。
+* 在 `INSTALLED_APPS` 註冊新建立 the `stock_db` App。
 
-#### [NEW] [celery.py](file:///home/dengkai/projects/financial-information/backend/core/celery.py)
-* 初始化 Celery 應用，載入 Django 設定，並開啟自動探測。
+#### [NEW] [apps.py](file:///home/dengkai/projects/financial-information/backend/stock_db/apps.py)
+* 建立 `stock_db` 應用設定檔。
 
-#### [MODIFY] [__init__.py](file:///home/dengkai/projects/financial-information/backend/core/__init__.py)
-* 於套件初始化時載入 `celery_app`，使其隨 Django 啟動。
+#### [NEW] [models.py](file:///home/dengkai/projects/financial-information/backend/stock_db/models.py)
+* 定義重構搬遷的 `CompanyProfile`, `CompanyCalendar`, `CompanyNews`, `StockScheduleList`。
+* 定義新模型 `TechnicalAnalysis`。
 
----
-
-### 📦 資料庫與爬蟲整合
-
-#### [MODIFY] [models.py](file:///home/dengkai/projects/financial-information/backend/core/models.py)
-* 定義 `CompanyProfile`, `CompanyCalendar`, `CompanyNews`, `StockScheduleList`。
-
-#### [NEW] [db_django.py](file:///home/dengkai/projects/financial-information/backend/core/scraper/db_django.py)
-* 實作使用 Django ORM (update_or_create) 的 upsert 機制，取代 `MySQLdb` 寫入。
-
-#### [NEW] [fetcher.py](file:///home/dengkai/projects/financial-information/backend/core/scraper/fetcher.py)
-* 移植原 `.backend_ver/corp_scraper/v2/items/1-profile/fetcher.py` 內容。
-
-#### [NEW] [translator.py](file:///home/dengkai/projects/financial-information/backend/core/scraper/translator.py)
-* 移植原 `.backend_ver/corp_scraper/v2/items/1-profile/translator.py` 內容。
-
-#### [NEW] [tasks.py](file:///home/dengkai/projects/financial-information/backend/core/tasks.py)
-* 建立 Celery 任務 `update_single_stock` 與 `update_all_scheduled_stocks`。
-
-#### [NEW] [admin.py](file:///home/dengkai/projects/financial-information/backend/core/admin.py)
-* 註冊自定義 Models 到 Unfold Admin；並用 Unfold 樣式重新接管 `PeriodicTask` 與 `CrontabSchedule`。
+#### [DELETE] [models.py](file:///home/dengkai/projects/financial-information/backend/core/models.py)
+* 刪除 `core` app 下的多餘模型，防止 migrations 衝突。
 
 ---
 
-### 🌐 路由、API 與前端展示
+### 📦 資料庫遷移、爬蟲與任務
+
+#### [NEW] [migrations/0001_initial.py](file:///home/dengkai/projects/financial-information/backend/stock_db/migrations/0001_initial.py)
+* 重新產生 `stock_db` 的初始建表遷移檔案，管理所有股票模型。
+
+#### [NEW] [ta_analyzer.py](file:///home/dengkai/projects/financial-information/backend/stock_db/scraper/ta_analyzer.py)
+* 實作技術指標計算、yfinance 擷取封裝。
+
+#### [MODIFY] [db_django.py](file:///home/dengkai/projects/financial-information/backend/core/scraper/db_django.py)
+* 移入 `stock_db` 或在此實作 `TechnicalAnalysis` 的 bulk_create/upsert 機制。
+
+#### [MODIFY] [tasks.py](file:///home/dengkai/projects/financial-information/backend/core/tasks.py)
+* 更新 `update_single_stock` 任務，在更新 profile 時一併擷取 3 年歷史技術分析指標並落庫。
+
+#### [NEW] [admin.py](file:///home/dengkai/projects/financial-information/backend/stock_db/admin.py)
+* 註冊新 models 至 Unfold 後台，提供完整的資料 CRUD 操作界面。
+
+#### [DELETE] [admin.py](file:///home/dengkai/projects/financial-information/backend/core/admin.py)
+* 清理 `core` app 下的模型註冊。
+
+---
+
+### 🌐 路由、API 與前端
 
 #### [MODIFY] [views.py](file:///home/dengkai/projects/financial-information/backend/core/views.py)
-* 實作 `/api/stock/fetch/` JSON API，處理搜尋與即時更新邏輯。
-* 實作 `/stock/calendar/<stock_id>/` 與 `/stock/news/<stock_id>/` 視圖，查詢並渲染所有行事曆與新聞。
+* 修改 `/api/stock/fetch/`，自 `TechnicalAnalysis` 撈取歷史指標數據並併入 JSON 回傳。
 
-#### [MODIFY] [urls.py](file:///home/dengkai/projects/financial-information/backend/core/urls.py)
-* 註冊 API 路由與 HTML 詳情分頁路由。
-
-#### [NEW] [stock_calendar.html](file:///home/dengkai/projects/financial-information/backend/templates/stock_calendar.html)
-* 渲染該股票全部行事曆的精美 HTML 範本。
-
-#### [NEW] [stock_news.html](file:///home/dengkai/projects/financial-information/backend/templates/stock_news.html)
-* 渲染該股票全部新聞公告的精美 HTML 範本。
+#### [MODIFY] [package.json](file:///home/dengkai/projects/financial-information/frontend/package.json)
+* 在 `dependencies` 新增 `"echarts": "^5.5.1"`。
 
 #### [MODIFY] [App.vue](file:///home/dengkai/projects/financial-information/frontend/src/App.vue)
-* 整合「公司基本資料戰情室」UI。
-* 串接後端 API，支援股票搜尋、即時更新。
-* 實作 "More" 按鈕跳轉至對應詳細頁面。
+* 整合 ECharts 技術分析圖表分頁。
+* 實現多指標 K 線、成交量、KD、MACD、BIAS 等共享 X 軸縮放圖表。
 
 ---
 
-## Verification Plan
+## 🧪 Verification Plan
 
 ### Automated Tests
-* 在 `backend/core/tests.py` 新增單元測試：
-  * 測試 `CompanyProfile`, `CompanyCalendar`, `CompanyNews`, `StockScheduleList` 的 ORM 功能與欄位約束。
-  * 測試 `/api/stock/fetch/` 的正常查詢與即時更新 API。
-  * 測試行事曆與新聞詳情頁面渲染。
-* 執行測試指令：
+* 於 `backend/stock_db/tests.py` 撰寫並擴充單元測試：
+  * 測試 `TechnicalAnalysis` ORM 的寫入、外鍵關聯與聯合唯一約束。
+  * 測試 `TAAnalyzer` 運算與 `StockScheduleList.analysis_period` 串接之 Mock 爬蟲 API。
+* 執行單元測試命令：
   ```bash
-  docker compose exec fin-backend python manage.py test core
+  docker compose exec fin-backend python manage.py test stock_db
   ```
 
 ### Manual Verification
-1. 建立 Migrations 並執行遷移：
+1. 刪除原有 core 遷移快取以防止多 app 重複建表，並執行 `makemigrations` 與 `migrate`：
    ```bash
-   docker compose exec fin-backend python manage.py makemigrations core
+   docker compose exec fin-backend python manage.py makemigrations stock_db
    docker compose exec fin-backend python manage.py migrate
    ```
-2. 重建並啟動容器：
+2. 安裝 frontend 容器依賴：
    ```bash
-   docker compose down
-   docker compose up -d --build
+   docker compose exec fin-frontend npm install
    ```
-3. 進入 Django Unfold 後台 (`http://localhost/admin/`)：
-   - 驗證「公司基本資料」、「公司行事曆」、「公司新聞」、「排程更新清單」等表單的管理功能（新增、修改、刪除）。
-   - 驗證 `Periodic tasks` 和 `Crontabs` 可以圖形化操作，新增定時任務。
-4. 前台網頁測試 (`http://localhost/tech-stack/`)：
-   - 進行股票代碼搜尋（如輸入 `2330` 並搜尋）。
-   - 點擊「即時更新並儲存」：驗證資料成功透過 yfinance & GNews 抓取、自動英翻中、儲存至 MariaDB，並順利在戰情室 Dashboard 顯示。
-   - 驗證搜尋過的代碼已被寫入「排程更新清單」表中。
-   - 點擊「行事曆」和「新聞」區的 `More` 按鈕，驗證會成功開啟新分頁，展示該股票的所有行事曆/新聞公告資料，且頁面風格美觀。
+3. 重啟服務容器以啟用最新配置。
+4. 進入後台驗證 `technical_analysis` 資料表管理功能，並在圖形化界面嘗試指派 Crontab 任務。
+5. 前往 `http://localhost/profile/`，搜尋並即時更新 `2330`，等待完成後切換至「技術分析圖表」頁籤，驗證 ECharts 綜合技術指標圖表是否能精美呈現、且滑動 DataZoom 縮放功能正常運作。

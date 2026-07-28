@@ -6,9 +6,10 @@
 import logging
 import time
 from celery import shared_task
-from core.models import StockScheduleList, CompanyProfile
+from stock_db.models import StockScheduleList, CompanyProfile
 from core.scraper.fetcher import StockProfileFetcher
 from core.scraper.db_django import DjangoDatabaseManager
+from stock_db.scraper.ta_analyzer import TAAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,19 @@ def update_single_stock(stock_id: str) -> str:
         db_manager.upsert_profile(profile)
         db_manager.upsert_calendars(calendar)
         db_manager.upsert_news(news + announcements)
+
+        # 5. 抓取並更新技術分析資料 (依據 StockScheduleList 的 analysis_period 年限)
+        schedule_item = StockScheduleList.objects.filter(stock_id=stock_id).first()
+        analysis_period = schedule_item.analysis_period if schedule_item else 3
+        
+        logger.info(f"開始抓取股票 {stock_id} 近 {analysis_period} 年技術分析資料...")
+        ta_analyzer = TAAnalyzer()
+        ta_df = ta_analyzer.calculate_ta(stock_id, f"{analysis_period}y")
+        if ta_df is not None and not ta_df.empty:
+            written_ta = db_manager.upsert_technical_analysis(stock_id, ta_df)
+            logger.info(f"股票 {stock_id} 技術分析資料成功更新，共 {written_ta} 筆！")
+        else:
+            logger.warning(f"股票 {stock_id} 未抓取到技術分析資料。")
 
         logger.info(f"股票 {stock_id} 資訊成功更新！")
         return f"Stock {stock_id} updated successfully"
