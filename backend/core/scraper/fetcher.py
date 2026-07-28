@@ -68,6 +68,11 @@ class StockProfileFetcher:
         if business_summary:
             business_summary = self.translator.translate(business_summary)
 
+        # 計算股本 (台股每股面額 10 元，股本 = 流通股數 * 10)
+        # 若為美股，通常直接看流通股數或總市值，一般不特別計算台制「股本」
+        shares = info.get('sharesOutstanding')
+        tw_capital = round(float(shares) * 10, 2) if (shares is not None and (".TW" in yf_stock_id or ".TWO" in yf_stock_id)) else None
+
         profile = {
             'stock_id': stock_id,
             'tax_id': None,  # MOPS/公開資訊觀測站可補充，預設為 None
@@ -85,7 +90,7 @@ class StockProfileFetcher:
             'email': None,
             'general_manager': general_manager,
             'stock_transfer_agent': None,
-            'capital': None,
+            'capital': tw_capital,
             'auditor': None,
             'issued_shares': info.get('sharesOutstanding'),
             'address': f"{info.get('address1', '')} {info.get('city', '')} {info.get('country', '')}".strip() or None,

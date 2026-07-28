@@ -349,3 +349,38 @@ description: 提供基於 Docker Compose 容器化技術之 Python Django 5.2 LT
    (5) 逐步解說 (Walkthrough)：逐步解說項目細部資訊，以 markdown 檔案儲存在 .agents/skills/django-on-docker/references/ 的資料夾內。
    (6) 完成後的檢查 (Final inspection)：檢查作業細部資訊，以 markdown 檔案儲存在 .agents/skills/django-on-docker/inspections/ 的資料夾內。
  </skill>
+
+ ------
+2026-07-28 10:48
+# 依據<spec>需求項目建立搜尋、儲存、排程「個股技術分析 technical-analysis 資料」單元，程式架構請參考<ref>。
+<spec>
+  1. 個股技術分析 technical-analysis 資料：
+     - 成交量
+     - KD,J
+     - MACD
+     - 乖離率
+     - 威廉指標
+     - 多空指標乖離
+     - CDP
+     - 動向指標DMI
+  2. 建立手動更新「個股技術分析 technical-analysis 資料」的功能，表單建立方式參考<ref>內schema.sql資訊。
+  3. 「2.」的功能與目前的「公司基本資料 profile」整合，在透過搜尋股票代碼更新建立「公司基本資料 profile」過程中，也一併更新建立「個股技術分析 technical-analysis 資料」。
+  4. 「2.」的功能加入 StockScheduleList ，並在 `user_stock_db`.`stock_schedule_list` 加入 analysis_period 欄位用於以年為單位抓取時間區間，預設為值為 3 ：代表抓取前 3 年的資料。
+  5. 使用 Django Celery Beat 元件，在 Django unfold 後管理 Crontab 定時任務；並 Django Unfold 後台增加資料庫表單管理功能：資料新增、修改、刪除。
+  6. 整合系統前台以戰情資訊室(dashboard)，增加個股技術分析 technical-analysis 資料分頁，使用前台 vue 與 Apache ECharts 技術畫出「1.」的個股技術分析圖。
+  7. 將建立的資料庫表單加入 Django 框架資料庫 migration 功能。
+  8. 另外建立一個「stock_db」migration 類別資料夾，重新整理將有關「公司基本資料 profile」與「個股技術分析 technical-analysis 資料」匯入「stock_db」migration 類別資料夾。
+  9. 功能建立完成後，需要完成單元測試與項目完成報告。
+</spec>
+<ref>
+ 參考 backend/.backend_ver/corp_scraper/v2/items/2-technical-analysis 資料夾內文件：
+ 1. 建立公司個股技術分析資料取單元的prompt：2-technical-analysis.md
+ 2. 資料庫表單建立規則：schema.sql
+ 3. 公司個股技術分析資料 profile 資料抓取單元：ta_analyzer.py
+ 4. 表單資料連線與新增更新函式：db_handler.py
+ 5. 手動測試單元：cli.py
+</ref>
+
+------
+2026-07-28 11:30
+http://localhost/profile 出現 Unexpected token '<', "<!DOCTYPE "... is not valid JSON 錯誤資訊
