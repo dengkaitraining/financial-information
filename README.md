@@ -226,7 +226,7 @@ docker compose exec fin-backend python manage.py test stock_db
 │   └── stock_db/                     # 台股資料處理專屬應用模組
 │       ├── models.py                 # CompanyProfile, CompanyCalendar, CompanyNews, TechnicalAnalysis 等模型
 │       ├── admin.py                  # 註冊股票 Models 至 Unfold 管理介面
-│       ├── tests.py                  # 股票模組 4 項單元測試 (ORM 讀寫、唯一約束、防錯 Upsert 運算)
+│       ├── tests.py                  # 股票模組 5 項單元測試 (ORM 讀寫、唯一約束、防錯 Upsert 運算、超長 URL 寫入)
 │       └── scraper/                  # 台股專屬爬蟲抓取包
 │           ├── fetcher.py            # yfinance/GNews 擷取與翻譯，支援 5 秒防封鎖延遲與台灣時區轉化
 │           ├── translator.py         # Google 翻譯英翻中介面
@@ -248,7 +248,7 @@ docker compose exec fin-backend python manage.py test stock_db
 | 測試項目 | 測試標的與指令 | 檢驗標準與預期結果 | 通過狀態 |
 | :--- | :--- | :--- | :--- |
 | **統一進入點部署** | `./scripts/deploy.sh` | 自動偵測系統、執行 Docker 構建與單元測試並驗證健康 API | **✓ 通過 (Exit 0)** |
-| **Django 單元測試** | `docker compose exec fin-backend python manage.py test stock_db` | 4 項單元測試 (技術分析模型、聯合約束、MariaDB 批次 upsert) 全數通過 | **✓ 通過 (Ran 4 tests OK)** |
+| **Django 單元測試** | `docker compose exec fin-backend python manage.py test stock_db` | 5 項單元測試 (技術分析模型、聯合約束、MariaDB 批次 upsert、超長 URL 儲存) 全數通過 | **✓ 通過 (Ran 5 tests OK)** |
 | **戰情室 URL 檢查** | [http://localhost/profile/](http://localhost/profile/) | 顯示靜態台股搜尋，手動輸入欄位具備手機端寬度防壓縮，輪詢結束自動二次拉取重繪 | **✓ 通過 (200 OK)** |
 | **健康檢測 URL 檢查**| [http://localhost/tech-stack/](http://localhost/tech-stack/) | 頁籤切換按鈕隱藏，首次載入自動檢測，爾後每 10 分鐘自動定時重新檢測與狀態更新 | **✓ 通過 (200 OK)** |
 | **自動化健康測試** | 執行 `./scripts/test_health.sh` | 終端機顯示 `🎉 所有自動化健康測試均完全通過!` | **✓ 通過 (Exit 0)** |

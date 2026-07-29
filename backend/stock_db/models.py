@@ -76,7 +76,7 @@ class CompanyNews(models.Model):
     stock = models.ForeignKey(CompanyProfile, on_delete=models.CASCADE, db_column='stock_id', related_name='news', verbose_name="公司")
     news_type = models.CharField(max_length=100, verbose_name="類型")  # NEWS / ANNOUNCEMENT
     title = models.TextField(verbose_name="標題")
-    url = models.CharField(max_length=500, verbose_name="新聞連結 URL")
+    url = models.TextField(verbose_name="新聞連結 URL")
     publisher = models.CharField(max_length=500, null=True, blank=True, verbose_name="發布來源")
     published_date = models.DateTimeField(null=True, blank=True, verbose_name="發布時間")
     summary = models.TextField(null=True, blank=True, verbose_name="內文摘要")
@@ -85,7 +85,6 @@ class CompanyNews(models.Model):
 
     class Meta:
         db_table = 'company_news'
-        unique_together = ('stock', 'url')
         verbose_name = "公司新聞與個股公告"
         verbose_name_plural = "公司新聞與個股公告"
 

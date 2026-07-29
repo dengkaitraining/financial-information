@@ -14,6 +14,11 @@ export default defineConfig({
     tailwindcss() // 啟用 Tailwind CSS v4 高效能 CSS 引擎
   ],
   server: {
+    allowedHosts: [
+      '*.ngrok-free.dev',
+      'localhost',
+      '*'
+    ],
     host: '0.0.0.0', // 監聽所有網路介面以利 Docker 存取
     port: 5173,
     hmr: false,

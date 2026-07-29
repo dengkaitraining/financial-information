@@ -76,10 +76,6 @@ class DjangoDatabaseManager:
         for item in news_list:
             stock_id = item.get('stock_id')
             url = item.get('url')
-            # 截斷過長的 url 以防長度超出 CharField 限制
-            if url and len(url) > 500:
-                url = url[:500]
-
             try:
                 stock = CompanyProfile.objects.get(stock_id=stock_id)
                 news_type = item.get('news_type')

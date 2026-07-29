@@ -102,3 +102,32 @@ class StockDBTestCase(TestCase):
         self.assertEqual(analyzer.get_yf_stock_id("2330"), "2330.TW")
         # 測試隨意代號
         self.assertEqual(analyzer.get_yf_stock_id("9999"), "9999.TW")
+
+    def test_news_url_text_field_and_long_url(self):
+        """測試 CompanyNews.url 欄位改為 Text 後，支援大於 500/1000 字元的超長連結寫入且不截斷"""
+        db_manager = DjangoDatabaseManager()
+        
+        # 產生一個長達 1000 字元的超長 URL
+        long_url = "https://example.com/news/" + ("a" * 900) + "/index.html"
+        self.assertTrue(len(long_url) > 900)
+        
+        news_data = [{
+            'stock_id': '2330',
+            'news_type': 'NEWS',
+            'title': '台積電長網址新聞測試',
+            'url': long_url,
+            'publisher': 'Yahoo Finance',
+            'published_date': datetime.datetime.now(),
+            'summary': '測試超長 url 儲存。'
+        }]
+        
+        # 執行 upsert
+        written = db_manager.upsert_news(news_data)
+        self.assertEqual(written, 1)
+        self.assertEqual(CompanyNews.objects.count(), 1)
+        
+        # 從資料庫中讀出並驗證長度與內容
+        saved_news = CompanyNews.objects.get(stock=self.profile)
+        self.assertEqual(saved_news.url, long_url)
+        self.assertEqual(len(saved_news.url), len(long_url))
+
