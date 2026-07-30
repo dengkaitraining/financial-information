@@ -15,7 +15,8 @@ class TAAnalyzer:
         if stock_id in twstock.codes:
             market = twstock.codes[stock_id].market
             return f"{stock_id}.TW" if market == "上市" else f"{stock_id}.TWO"
-        return f"{stock_id}.TW"
+        else:
+            return f"{stock_id}.TWO"
 
     def calculate_ta(self, stock_id: str, period_str: str = "3y") -> pd.DataFrame:
         """抓取資料並計算技術指標，最後回傳包含所有技術指標的 DataFrame"""

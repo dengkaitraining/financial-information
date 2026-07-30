@@ -13,12 +13,18 @@ import twstock
 import yfinance as yf
 from gnews import GNews
 from .translator import TextTranslator
+import re
 
 class StockProfileFetcher:
     def __init__(self):
         self.translator = TextTranslator()
         # 初始化 GNews (針對繁體中文/台灣地區)
         self.gn = GNews(language='zh-TW', country='TW', max_results=100)
+
+    def _is_pure_keyboard_str(self, text: str) -> bool:
+        """判斷字串是否只包含英數字與常用標點"""
+        # 匹配從頭到尾都是 ASCII 32 到 126 的字元
+        return bool(re.match(r"^[\x20-\x7E]+$", text))
 
     def _parse_gnews_date(self, date_str: str) -> str:
         """將 GNews 的時間字串轉換為 MariaDB DATETIME 格式 (轉換為 UTC+8 台灣時間)"""
@@ -44,7 +50,10 @@ class StockProfileFetcher:
                 return f"{stock_id}.TW", "上市"
             elif market in ['上櫃', '興櫃']:
                 return f"{stock_id}.TWO", market
-        return f"{stock_id}.TW", "上市"
+            else:
+                return f"{stock_id}.TWO", market
+        else:
+            return f"{stock_id}.TWO", "上櫃"
 
     def fetch_profile(self, stock_id: str) -> Dict:
         """擷取公司基本資料 25 項欄位"""
@@ -151,7 +160,11 @@ class StockProfileFetcher:
     def fetch_news_and_announcements(self, stock_id: str, company_name: str) -> Tuple[List[Dict], List[Dict]]:
         """擷取近 100 筆相關新聞與近 100 筆個股公告"""
         # 1. 抓取相關新聞
-        news_query = f"{stock_id} {company_name}"
+        if self._is_pure_keyboard_str(company_name):
+            news_query = f"{stock_id} or 股票"
+        else:
+            news_query = f"{stock_id} or {company_name}"
+
         raw_news = self.gn.get_news(news_query) or []
         news_list = []
 
@@ -172,7 +185,11 @@ class StockProfileFetcher:
             })
 
         # 2. 抓取個股公告
-        ann_query = f"{stock_id} {company_name} 重訊 公告"
+        if self._is_pure_keyboard_str(company_name):
+            ann_query = f"{stock_id} or 股票 or 重訊 or 公告"
+        else:
+            ann_query = f"{stock_id} or {company_name} or 重訊 or 公告"
+
         raw_ann = self.gn.get_news(ann_query) or []
         ann_list = []
 

@@ -123,7 +123,9 @@ class DjangoDatabaseManager:
             records.append(TechnicalAnalysis(
                 stock=stock,
                 trade_date=row['Date'],
-                volume=row.get('Volume'),
+                #volume=row.get('Volume'),
+                volume=round(row.get('Volume')*0.001),
+                #volume=row.get('RegularMarketVolume'),
                 open_price=row.get('Open'),
                 high_price=row.get('High'),
                 low_price=row.get('Low'),
