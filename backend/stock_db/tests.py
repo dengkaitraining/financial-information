@@ -5,7 +5,7 @@
 
 from django.test import TestCase
 from stock_db.models import CompanyProfile, CompanyCalendar, CompanyNews, StockScheduleList, TechnicalAnalysis
-from core.scraper.db_django import DjangoDatabaseManager
+from stock_db.scraper.db_django import DjangoDatabaseManager
 from stock_db.scraper.ta_analyzer import TAAnalyzer
 import datetime
 import pandas as pd
@@ -101,7 +101,7 @@ class StockDBTestCase(TestCase):
         # 測試台積電 (2330)
         self.assertEqual(analyzer.get_yf_stock_id("2330"), "2330.TW")
         # 測試隨意代號
-        self.assertEqual(analyzer.get_yf_stock_id("9999"), "9999.TW")
+        self.assertEqual(analyzer.get_yf_stock_id("9999"), "9999.TWO")
 
     def test_news_url_text_field_and_long_url(self):
         """測試 CompanyNews.url 欄位改為 Text 後，支援大於 500/1000 字元的超長連結寫入且不截斷"""

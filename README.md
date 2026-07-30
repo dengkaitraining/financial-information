@@ -178,7 +178,7 @@ SHOW_BACKEND_VER=True
 # 1. 統一跨平台進入點 (Linux, macOS, Git Bash, WSL)
 ./scripts/deploy.sh
 
-# 2. 執行 Django 5.2 後端與台股資料單元測試 (4 項測試)
+# 2. 執行 Django 5.2 後端與台股資料單元測試 (5 項測試)
 docker compose exec fin-backend python manage.py test stock_db
 
 # 3. 執行線上服務健康檢測
@@ -233,7 +233,7 @@ docker compose exec fin-backend python manage.py test stock_db
 │           └── db_django.py          # ORM 數據 upsert 落庫與斜線日期格式清洗
 ├── frontend/                         # Vue 3.5 前端應用程式
 │   ├── Dockerfile
-│   ├── vite.config.ts                # 禁用 HMR 解決 Apache 反向代理重寫無限刷新問題
+│   ├── vite.config.ts                # 精準配置 HMR WebSocket 路徑，解決 Apache 反向代理重寫連線錯誤
 │   └── src/App.vue                   # 手機端響應式輸入框優化，Logo與動態 title (Financial Information)，180秒輪詢容錯
 ├── db_data/                          # MariaDB 12.3 實體目錄持久化區 (Git 忽略)
 └── redis_data/                       # Redis 8.8 實體目錄持久化區 (Git 忽略)
