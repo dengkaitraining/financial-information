@@ -15,21 +15,16 @@ export default defineConfig({
   ],
   server: {
     allowedHosts: [
-      '*.ngrok-free.dev',
+      '.ngrok-free.dev',
+      '.ngrok.io',
       'localhost',
-      '*'
+      '127.0.0.1'
     ],
     host: '0.0.0.0', // 監聽所有網路介面以利 Docker 存取
     port: 5173,
-    hmr: false,
-    /*
     hmr: {
-      protocol: 'ws',
-      host: 'localhost',
-      port: 80,
       path: 'tech-stack/_hmr'
     },
-    */
     watch: {
       usePolling: true // 開啟輪詢模式，確保 Windows 掛載磁碟時能即時感應檔案修改
     }

@@ -14,6 +14,19 @@ SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-default-key')
 DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
 ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,web,backend,fin-backend,shack-earflap-euphemism.ngrok-free.dev,*').split(',')
 
+# CSRF 信任來源設定 (解決 ngrok 或是外網 HTTPS 連線時 CSRF 驗證失敗的痛點)
+CSRF_TRUSTED_ORIGINS = []
+for host in ALLOWED_HOSTS:
+    host = host.strip()
+    if host:
+        if host == '*':
+            CSRF_TRUSTED_ORIGINS.append('https://*.ngrok-free.dev')
+            CSRF_TRUSTED_ORIGINS.append('https://*.ngrok.io')
+        else:
+            CSRF_TRUSTED_ORIGINS.append(f"http://{host}")
+            CSRF_TRUSTED_ORIGINS.append(f"https://{host}")
+
+
 # 顯示後端手動測試驗證資料的開關 (測試開發環境顯示，正式上線隱蔽)
 SHOW_BACKEND_VER = os.environ.get('SHOW_BACKEND_VER', 'True') == 'True'
 
