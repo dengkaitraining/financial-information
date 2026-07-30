@@ -30,6 +30,7 @@ backend/.backend_ver/gnews_scraper/
 frontend/entrypoint.sh
 frontend/frontend_ver
 .agents/
+backend/templates/bak/
 
 # Django
 staticfiles/

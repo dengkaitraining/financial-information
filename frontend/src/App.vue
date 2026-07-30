@@ -920,9 +920,11 @@ onUnmounted(() => {
                     <a :href="news.url" target="_blank" class="font-bold text-slate-200 hover:text-cyan-400 hover:underline leading-relaxed block">
                       {{ news.title }}
                     </a>
+                    <!--
                     <p class="text-[10px] text-slate-500 mt-2 line-clamp-2 leading-relaxed">
                       {{ news.summary || '無摘要說明。' }}
                     </p>
+                    -->
                     <div class="text-[10px] text-cyan-500 mt-2 font-semibold">來源: {{ news.publisher || '未知' }}</div>
                   </div>
                 </div>
