@@ -1,4 +1,4 @@
-# Django + Vue.js Web 資訊系統開發環境 (Docker Containerized Stack)
+# 股票智慧系統 (Financial Information)
 
 ![Docker](https://img.shields.io/badge/Docker-2.4-blue?logo=docker)
 ![Django](https://img.shields.io/badge/Django-5.2_LTS-092E20?logo=django)
